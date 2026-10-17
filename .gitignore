@@ -1,0 +1,53 @@
+# .NET build artifacts
+**/[Bb]in/
+**/[Oo]bj/
+artifacts/
+TestResults/
+*.nupkg
+*.snupkg
+
+# Visual Studio and per-user settings
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.VC.db
+*.VC.VC.opendb
+
+# VS Code: keep portable project configuration
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+.history/
+
+# Private keys and local key material (never commit real keys)
+keys/
+*.key
+*.pfx
+*.p12
+*.snk
+# PEM exports can contain private keys
+*.pem
+*private*.xml
+*Private*.xml
+*PRIVATE*.xml
+aes-key*
+AES-key*
+
+# Local test data, including large benchmark files, and generated results
+/test-data/*
+!/test-data/README.md
+/results/*
+!/results/README.md
+
+# Temporary encryption/decryption output
+*.enc
+*.encrypted
+*.dec
+*.decrypted
+*.tmp
+*.temp
