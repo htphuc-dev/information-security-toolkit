@@ -16,7 +16,11 @@ Các module dự kiến:
 
 `Common` dành cho tiện ích dùng chung; `docs/screenshots` lưu ảnh minh họa; `test-data` lưu dữ liệu thử; `results` lưu kết quả.
 
-Trạng thái hiện tại: **Initial setup**. Chưa triển khai logic mật mã hoặc WinForms UI.
+Trạng thái hiện tại: **Milestone 2 — AES Key Management**. Đã có sinh, lưu/import và kiểm tra khóa AES-256. Chưa triển khai mã hóa/giải mã, các module mật mã khác hoặc WinForms UI.
+
+Demo: sinh khóa ngẫu nhiên 32 byte, in Base64, lưu file, đọc lại và so sánh; in `PASS` khi khóa trùng khớp. File nằm tại `keys/aes-demo.key` trong thư mục output của ứng dụng (mặc định: `information-security-toolkit/bin/Debug/net10.0/keys/aes-demo.key`) và đã được `.gitignore` bỏ qua. Mỗi lần chạy demo sẽ sinh khóa mới và ghi đè file demo này.
+
+File khóa là văn bản Base64, **không được mã hóa**. Chỉ dùng khóa demo cho bài tập; giữ bí mật file khóa và nội dung khóa in ra Console.
 
 Build và chạy từ thư mục root:
 
