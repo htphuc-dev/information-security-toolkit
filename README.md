@@ -16,11 +16,17 @@ Các module dự kiến:
 
 `Common` dành cho tiện ích dùng chung; `docs/screenshots` lưu ảnh minh họa; `test-data` lưu dữ liệu thử; `results` lưu kết quả.
 
-Trạng thái hiện tại: **Milestone 2 — AES Key Management**. Đã có sinh, lưu/import và kiểm tra khóa AES-256. Chưa triển khai mã hóa/giải mã, các module mật mã khác hoặc WinForms UI.
+Trạng thái hiện tại: **Milestone 2.2 — AES Text Encryption**. Đã có quản lý khóa AES-256 và mã hóa/giải mã văn bản bằng AES-GCM. Chưa triển khai mã hóa file, các module mật mã khác hoặc WinForms UI.
 
-Demo: sinh khóa ngẫu nhiên 32 byte, in Base64, lưu file, đọc lại và so sánh; in `PASS` khi khóa trùng khớp. File nằm tại `keys/aes-demo.key` trong thư mục output của ứng dụng (mặc định: `information-security-toolkit/bin/Debug/net10.0/keys/aes-demo.key`) và đã được `.gitignore` bỏ qua. Mỗi lần chạy demo sẽ sinh khóa mới và ghi đè file demo này.
+Demo: load khóa 32 byte đã có hoặc sinh và lưu khóa nếu chưa có file. File nằm tại `keys/aes-demo.key` trong thư mục output của ứng dụng (mặc định: `information-security-toolkit/bin/Debug/net10.0/keys/aes-demo.key`) và đã được `.gitignore` bỏ qua. File khóa lỗi được báo ra Console, không tự ghi đè.
 
-File khóa là văn bản Base64, **không được mã hóa**. Chỉ dùng khóa demo cho bài tập; giữ bí mật file khóa và nội dung khóa in ra Console.
+Nhập văn bản vào Console, hoặc nhấn Enter để dùng mẫu tiếng Việt. Demo mã hóa hai lần bằng cùng khóa, in hai chuỗi Base64, giải mã và in `PASS/FAIL` cho phép so sánh plaintext và kiểm tra hai output khác nhau.
+
+`AesTextService.Encrypt` chuyển văn bản sang UTF-8, dùng nonce ngẫu nhiên 12 byte và authentication tag 16 byte. Định dạng trả về là `Base64(nonce | tag | ciphertext)`: byte 0–11 là nonce, byte 12–27 là tag, các byte từ 28 trở đi là ciphertext. Khóa không nằm trong output. Nonce mới được sinh cho mỗi lần mã hóa nên cùng plaintext và khóa vẫn cho output khác nhau.
+
+`Decrypt` decode Base64, tách ba phần, xác thực tag rồi trả lại văn bản UTF-8. Sai khóa hoặc dữ liệu bị sửa sẽ bị từ chối. API hỗ trợ chuỗi plaintext rỗng; từ chối `null`, khóa khác 32 byte, Base64 lỗi, payload thiếu nonce/tag và văn bản Unicode không hợp lệ. Các lỗi được báo bằng exception chuẩn .NET và demo bắt lỗi để in thông báo, thoát với mã 1 thay vì stack trace không kiểm soát.
+
+File khóa là văn bản Base64, **không được mã hóa**. Chỉ dùng khóa demo cho bài tập và giữ bí mật file khóa.
 
 Build và chạy từ thư mục root:
 
