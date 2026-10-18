@@ -16,7 +16,7 @@ Các module dự kiến:
 
 `Common` dành cho tiện ích dùng chung; `docs/screenshots` lưu ảnh minh họa; `test-data` lưu dữ liệu thử; `results` lưu kết quả.
 
-Trạng thái hiện tại: **Milestone 2.3 — AES File Encryption**. Đã có quản lý khóa AES-256, mã hóa/giải mã văn bản và file. Chưa benchmark file lớn, triển khai các module mật mã khác hoặc WinForms UI.
+Trạng thái hiện tại: **Milestone 2.4 — AES File Benchmark**. Đã có quản lý khóa AES-256, mã hóa/giải mã văn bản và file, benchmark Quick/Full. Các module mật mã khác và WinForms UI chưa triển khai.
 
 Demo: load khóa 32 byte đã có hoặc sinh và lưu khóa nếu chưa có file. File nằm tại `keys/aes-demo.key` trong thư mục output của ứng dụng (mặc định: `information-security-toolkit/bin/Debug/net10.0/keys/aes-demo.key`) và đã được `.gitignore` bỏ qua. File khóa lỗi được báo ra Console, không tự ghi đè.
 
@@ -32,7 +32,13 @@ Mỗi lần chạy tạo `results/run-<id>/`, chứa `<tên-file>.enc` và `<tê
 
 File nhị phân v1: `ISTF(4) | version=1(1) | salt(16) | IV(16) | HMAC(32) | ciphertext(N×16)`. HMAC bao phủ toàn bộ header (magic, version, salt, IV) và ciphertext, không bao gồm trường HMAC. Mã hóa ghi ciphertext rồi đọc lại theo chunk để tính HMAC; giải mã xác minh toàn bộ MAC bằng `FixedTimeEquals` trước khi decrypt trong lượt đọc thứ hai. Một handle input được giữ mở với `FileShare.Read` để ngăn ghi/xóa file trong lúc xác minh và giải mã trên Windows.
 
-Output luôn là file mới: ghi vào file `.tmp` cùng thư mục, chỉ chuyển sang tên đích sau khi thành công; lỗi sẽ dọn file tạm và không ghi đè file hiện có. Bộ nhớ dùng cho buffer không tăng theo kích thước file; đánh đổi là hai lượt I/O. Chưa thực hiện benchmark hoặc thử file 1 GB ở giai đoạn này. Lỗi được báo bằng exception chuẩn .NET và demo in `FAIL`, thoát với mã 1 khi kiểm tra không đạt.
+Output luôn là file mới: ghi vào file `.tmp` cùng thư mục, chỉ chuyển sang tên đích sau khi thành công; lỗi sẽ dọn file tạm và không ghi đè file hiện có. Bộ nhớ dùng cho buffer không tăng theo kích thước file; đánh đổi là hai lượt I/O. Lỗi được báo bằng exception chuẩn .NET và chương trình in `FAIL`, thoát với mã 1 khi không hoàn thành.
+
+Benchmark chỉ chạy khi truyền `benchmark quick` (1/10 MB) hoặc `benchmark full` (100/500 MB, 1 GB). Quy ước: 1 MB = 1.000.000 byte, 1 GB = 1.000 MB. Không có tham số vẫn chạy demo file nhỏ. Dữ liệu được sinh theo chunk 1 MiB (lặp lại một block ngẫu nhiên), lưu trong `test-data/benchmark/`; file đúng kích thước được tái sử dụng, file sai kích thước được báo lỗi và giữ nguyên.
+
+Sau warm-up 64 KiB, mỗi file được đo một lần bằng hai `Stopwatch` riêng cho encrypt/decrypt; không tính tạo file, SHA-256 hoặc ghi CSV vào thời gian đo. Throughput MB/s = kích thước nguồn MB / thời gian giây. Đo toàn bộ thao tác AES-CBC + HMAC và I/O; cache của hệ điều hành có thể ảnh hưởng số liệu. Kích thước và SHA-256 streaming của nguồn/giải mã phải trùng nhau; SHA-256 ở đây chỉ phục vụ xác minh benchmark, chưa phải module bài tập riêng.
+
+Output nằm trong `results/benchmark/run-<RunId>/`; CSV `results/benchmark/aes-benchmark.csv` append thời gian UTC, tên/kích thước file, thời gian ms, throughput, hai SHA-256, integrity/PASS/FAIL, mode và RunId. CSV dùng dấu chấm thập phân để đọc nhất quán. Giữ nguyên kết quả cũ; benchmark kiểm tra dung lượng trống trước khi chạy. Full lần đầu có thể dùng hơn 4,8 GB cho nguồn + mã hóa + giải mã; chỉ chạy khi chọn rõ `full`. Dữ liệu/CSV benchmark đều được Git ignore. Full mode để chạy thủ công sau.
 
 File khóa là văn bản Base64, **không được mã hóa**. Chỉ dùng khóa demo cho bài tập và giữ bí mật file khóa.
 
@@ -41,4 +47,10 @@ Build và chạy từ thư mục root:
 ```powershell
 dotnet build information-security-toolkit.slnx
 dotnet run --project information-security-toolkit/information-security-toolkit.csproj
+
+# Quick benchmark (khuyên dùng Release khi thu thập số liệu)
+dotnet run -c Release --project information-security-toolkit/information-security-toolkit.csproj -- benchmark quick
+
+# Full benchmark: tự chạy khi cần, có thể dùng nhiều GB dung lượng
+dotnet run -c Release --project information-security-toolkit/information-security-toolkit.csproj -- benchmark full
 ```

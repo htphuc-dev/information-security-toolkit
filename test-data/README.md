@@ -6,4 +6,6 @@ Lưu dữ liệu thử và các file lớn dùng cho benchmark tại đây.
 
 Chạy `dotnet run --project information-security-toolkit/information-security-toolkit.csproj` từ root repository. Kết quả được lưu trong `results/run-<id>/`.
 
+`benchmark/` chứa dữ liệu benchmark được sinh theo chunk khi chọn `benchmark quick` (1/10 MB) hoặc `benchmark full` (100/500 MB, 1 GB). File đúng kích thước được tái sử dụng. Thư mục con này không được xử lý bởi demo mặc định. 1 MB = 1.000.000 byte; không commit các file benchmark lớn.
+
 Nội dung thư mục được Git bỏ qua, ngoại trừ README.md này. Tạo dữ liệu thử cục bộ; không dùng dữ liệu nhạy cảm hoặc khóa bí mật làm dữ liệu mẫu được commit.

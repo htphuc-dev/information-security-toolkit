@@ -1,19 +1,25 @@
 using System.Security.Cryptography;
 using System.Text;
 using information_security_toolkit.AES;
+using information_security_toolkit.Benchmark;
 
 Console.OutputEncoding = Encoding.UTF8;
 Console.WriteLine("Information Security Toolkit");
-Console.WriteLine("AES File Encryption Demo");
+bool benchmarkRequested = args.Length == 2
+    && string.Equals(args[0], "benchmark", StringComparison.OrdinalIgnoreCase)
+    && (string.Equals(args[1], "quick", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(args[1], "full", StringComparison.OrdinalIgnoreCase));
+if (args.Length != 0 && !benchmarkRequested)
+{
+    Console.Error.WriteLine("Usage: dotnet run --project information-security-toolkit/information-security-toolkit.csproj -- [benchmark quick|full]");
+    return 1;
+}
+
+Console.WriteLine(benchmarkRequested ? "AES FILE BENCHMARK" : "AES File Encryption Demo");
 
 try
 {
     string repositoryRoot = FindRepositoryRoot();
-    string testDataDirectory = Path.Combine(repositoryRoot, "test-data");
-    string resultsDirectory = Path.Combine(repositoryRoot, "results");
-    Directory.CreateDirectory(testDataDirectory);
-    Directory.CreateDirectory(resultsDirectory);
-
     string keyDirectory = Path.Combine(AppContext.BaseDirectory, "keys");
     Directory.CreateDirectory(keyDirectory);
     string keyFilePath = Path.Combine(keyDirectory, "aes-demo.key");
@@ -31,6 +37,16 @@ try
         Console.WriteLine($"Created AES-256 key at: {keyFilePath}");
     }
 
+    if (benchmarkRequested)
+    {
+        var benchmarkResults = AesFileBenchmark.Run(repositoryRoot, key, args[1]);
+        return benchmarkResults.All(result => result.Passed) ? 0 : 1;
+    }
+
+    string testDataDirectory = Path.Combine(repositoryRoot, "test-data");
+    string resultsDirectory = Path.Combine(repositoryRoot, "results");
+    Directory.CreateDirectory(testDataDirectory);
+    Directory.CreateDirectory(resultsDirectory);
     string textPath = Path.Combine(testDataDirectory, "sample.txt");
     if (!File.Exists(textPath))
     {
@@ -122,7 +138,7 @@ try
 catch (Exception ex) when (ex is ArgumentException or FormatException or CryptographicException
     or IOException or UnauthorizedAccessException or NotSupportedException or InvalidOperationException)
 {
-    Console.Error.WriteLine($"AES file demo: FAIL — {ex.Message}");
+    Console.Error.WriteLine($"{(benchmarkRequested ? "AES benchmark" : "AES file demo")}: FAIL — {ex.Message}");
     return 1;
 }
 
