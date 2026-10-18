@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using information_security_toolkit.AES;
 using information_security_toolkit.Benchmark;
+using information_security_toolkit.RSA;
 
 Console.OutputEncoding = Encoding.UTF8;
 Console.WriteLine("Information Security Toolkit");
@@ -9,17 +10,26 @@ bool benchmarkRequested = args.Length == 2
     && string.Equals(args[0], "benchmark", StringComparison.OrdinalIgnoreCase)
     && (string.Equals(args[1], "quick", StringComparison.OrdinalIgnoreCase)
         || string.Equals(args[1], "full", StringComparison.OrdinalIgnoreCase));
-if (args.Length != 0 && !benchmarkRequested)
+bool rsaKeysRequested = args.Length == 2
+    && string.Equals(args[0], "rsa", StringComparison.OrdinalIgnoreCase)
+    && string.Equals(args[1], "keys", StringComparison.OrdinalIgnoreCase);
+if (args.Length != 0 && !benchmarkRequested && !rsaKeysRequested)
 {
-    Console.Error.WriteLine("Usage: dotnet run --project information-security-toolkit/information-security-toolkit.csproj -- [benchmark quick|full]");
+    Console.Error.WriteLine("Usage: dotnet run --project information-security-toolkit/information-security-toolkit.csproj -- [benchmark quick|full | rsa keys]");
     return 1;
 }
 
-Console.WriteLine(benchmarkRequested ? "AES FILE BENCHMARK" : "AES File Encryption Demo");
+Console.WriteLine(rsaKeysRequested ? "RSA KEY MANAGEMENT DEMO"
+    : benchmarkRequested ? "AES FILE BENCHMARK" : "AES File Encryption Demo");
 
 try
 {
     string repositoryRoot = FindRepositoryRoot();
+    if (rsaKeysRequested)
+    {
+        return RunRsaKeyDemo(repositoryRoot);
+    }
+
     string keyDirectory = Path.Combine(AppContext.BaseDirectory, "keys");
     Directory.CreateDirectory(keyDirectory);
     string keyFilePath = Path.Combine(keyDirectory, "aes-demo.key");
@@ -138,8 +148,94 @@ try
 catch (Exception ex) when (ex is ArgumentException or FormatException or CryptographicException
     or IOException or UnauthorizedAccessException or NotSupportedException or InvalidOperationException)
 {
-    Console.Error.WriteLine($"{(benchmarkRequested ? "AES benchmark" : "AES file demo")}: FAIL — {ex.Message}");
+    string operation = rsaKeysRequested ? "RSA key management" : benchmarkRequested ? "AES benchmark" : "AES file demo";
+    Console.Error.WriteLine($"{operation}: FAIL — {ex.Message}");
     return 1;
+}
+
+static int RunRsaKeyDemo(string repositoryRoot)
+{
+    using var original = RsaKeyManager.GenerateKeyPair();
+    Console.WriteLine($"Key size: {original.KeySize} bits");
+    string directory = Path.Combine(repositoryRoot, "keys", "rsa", $"run-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(directory);
+    string publicPath = Path.Combine(directory, "rsa-public.pem");
+    string privatePath = Path.Combine(directory, "rsa-private.pem");
+
+    RsaKeyManager.ExportPublicKey(original, publicPath);
+    Console.WriteLine($"Public key exported: PASS — {publicPath}");
+    RsaKeyManager.ExportPrivateKey(original, privatePath);
+    Console.WriteLine($"Private key exported: PASS — {privatePath}");
+    using var publicKey = RsaKeyManager.LoadPublicKey(publicPath);
+    Console.WriteLine("Public key imported: PASS");
+    using var privateKey = RsaKeyManager.LoadPrivateKey(privatePath);
+    Console.WriteLine("Private key imported: PASS");
+
+    RSAParameters originalParameters = PemAnalyzer.GetParameters(original);
+    RSAParameters publicParameters = PemAnalyzer.GetParameters(publicKey);
+    RSAParameters privatePublicParameters = PemAnalyzer.GetParameters(privateKey);
+    bool publicMatch = originalParameters.Modulus.AsSpan().SequenceEqual(publicParameters.Modulus);
+    bool privateMatch = originalParameters.Modulus.AsSpan().SequenceEqual(privatePublicParameters.Modulus);
+    bool exponentsMatch = originalParameters.Exponent.AsSpan().SequenceEqual(publicParameters.Exponent)
+        && originalParameters.Exponent.AsSpan().SequenceEqual(privatePublicParameters.Exponent);
+    Console.WriteLine($"Public modulus match: {(publicMatch ? "PASS" : "FAIL")}");
+    Console.WriteLine($"Private modulus match: {(privateMatch ? "PASS" : "FAIL")}");
+    Console.WriteLine($"Public/private exponents match: {(exponentsMatch ? "PASS" : "FAIL")}");
+    PemAnalyzer.PrintParameters(publicKey);
+    PemAnalyzer.PrintParameters(privateKey, includePrivateParameters: true);
+
+    Console.WriteLine("\nPEM failure handling checks");
+    string missingPath = Path.Combine(directory, "does-not-exist.pem");
+    ExpectRejected<FileNotFoundException>("Missing public PEM rejected", () =>
+    {
+        using var unexpected = RsaKeyManager.LoadPublicKey(missingPath);
+    });
+    ExpectRejected<FileNotFoundException>("Missing private PEM rejected", () =>
+    {
+        using var unexpected = RsaKeyManager.LoadPrivateKey(missingPath);
+    });
+
+    string invalidPath = Path.Combine(directory, "invalid.pem");
+    File.WriteAllText(invalidPath, "This is not a PEM key.");
+    ExpectRejected<FormatException>("Malformed public PEM rejected", () =>
+    {
+        using var unexpected = RsaKeyManager.LoadPublicKey(invalidPath);
+    });
+    ExpectRejected<FormatException>("Malformed private PEM rejected", () =>
+    {
+        using var unexpected = RsaKeyManager.LoadPrivateKey(invalidPath);
+    });
+    ExpectRejected<FormatException>("Private PEM passed to public loader rejected", () =>
+    {
+        using var unexpected = RsaKeyManager.LoadPublicKey(privatePath);
+    });
+    ExpectRejected<FormatException>("Public PEM passed to private loader rejected", () =>
+    {
+        using var unexpected = RsaKeyManager.LoadPrivateKey(publicPath);
+    });
+    ExpectRejected<ArgumentOutOfRangeException>("Unsupported key size rejected", () =>
+    {
+        using var unexpected = RsaKeyManager.GenerateKeyPair(1024);
+    });
+
+    bool passed = publicMatch && privateMatch && exponentsMatch;
+    Console.WriteLine($"\nRSA key management result: {(passed ? "PASS" : "FAIL")}");
+    return passed ? 0 : 1;
+
+    static void ExpectRejected<T>(string label, Action action) where T : Exception
+    {
+        try
+        {
+            action();
+        }
+        catch (T ex)
+        {
+            Console.WriteLine($"{label}: PASS — {ex.Message}");
+            return;
+        }
+
+        throw new InvalidOperationException($"{label}: expected input rejection.");
+    }
 }
 
 static string FindRepositoryRoot()

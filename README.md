@@ -16,7 +16,7 @@ Các module dự kiến:
 
 `Common` dành cho tiện ích dùng chung; `docs/screenshots` lưu ảnh minh họa; `test-data` lưu dữ liệu thử; `results` lưu kết quả.
 
-Trạng thái hiện tại: **Milestone 2.4 — AES File Benchmark**. Đã có quản lý khóa AES-256, mã hóa/giải mã văn bản và file, benchmark Quick/Full. Các module mật mã khác và WinForms UI chưa triển khai.
+Trạng thái hiện tại: **Milestone 3 — RSA Key Management + PEM**. Đã hoàn thành các phần AES và quản lý khóa RSA. RSA encrypt/decrypt, RSA benchmark, module SHA-256 riêng, chữ ký số và WinForms UI chưa triển khai.
 
 Demo: load khóa 32 byte đã có hoặc sinh và lưu khóa nếu chưa có file. File nằm tại `keys/aes-demo.key` trong thư mục output của ứng dụng (mặc định: `information-security-toolkit/bin/Debug/net10.0/keys/aes-demo.key`) và đã được `.gitignore` bỏ qua. File khóa lỗi được báo ra Console, không tự ghi đè.
 
@@ -42,11 +42,18 @@ Output nằm trong `results/benchmark/run-<RunId>/`; CSV `results/benchmark/aes-
 
 File khóa là văn bản Base64, **không được mã hóa**. Chỉ dùng khóa demo cho bài tập và giữ bí mật file khóa.
 
+`RsaKeyManager` sinh cặp khóa RSA mặc định 2048 bit, hỗ trợ 3072/4096 bit. Public key export/import theo SPKI (`PUBLIC KEY`), private key theo PKCS#8 không mã hóa (`PRIVATE KEY`). Loader yêu cầu đúng loại, đúng một PEM block, không chấp nhận dữ liệu thừa hay nội dung ASN.1 không hợp lệ. Khóa import cũng phải có một trong các kích thước được hỗ trợ; export không ghi đè file đã có. Các đối tượng `RSA` trả về cần được giải phóng bằng `using`.
+
+`PemAnalyzer` lấy `RSAParameters` và in Base64/số byte: public `(n, e)`, private `(n, e, d, p, q, dp, dq, inverseQ)`; exponent còn được hiển thị dạng số. Lệnh `rsa keys` sinh/export/import lại khóa, so sánh modulus/exponent và kiểm tra các đầu vào lỗi. PEM local nằm trong `keys/rsa/run-<id>/`, đã được Git ignore. Demo in cả tham số private ra Console và lưu private PEM không mã hóa; chỉ dùng khóa thử nghiệm và giữ bí mật các giá trị này.
+
 Build và chạy từ thư mục root:
 
 ```powershell
 dotnet build information-security-toolkit.slnx
 dotnet run --project information-security-toolkit/information-security-toolkit.csproj
+
+# RSA Key Management + PEM
+dotnet run --project information-security-toolkit/information-security-toolkit.csproj -- rsa keys
 
 # Quick benchmark (khuyên dùng Release khi thu thập số liệu)
 dotnet run -c Release --project information-security-toolkit/information-security-toolkit.csproj -- benchmark quick
