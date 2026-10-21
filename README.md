@@ -16,7 +16,7 @@ Các module dự kiến:
 
 `Common` dành cho tiện ích dùng chung; `docs/screenshots` lưu ảnh minh họa; `test-data` lưu dữ liệu thử; `results` lưu kết quả.
 
-Trạng thái hiện tại: **Milestone 3 — RSA Key Management + PEM**. Đã hoàn thành các phần AES và quản lý khóa RSA. RSA encrypt/decrypt, RSA benchmark, module SHA-256 riêng, chữ ký số và WinForms UI chưa triển khai.
+Trạng thái hiện tại: **Milestone 4 — RSA Encryption/Decryption**. Đã hoàn thành các phần AES, quản lý khóa RSA/PEM và RSA encrypt/decrypt dữ liệu nhỏ. RSA benchmark, module SHA-256 riêng, chữ ký số và WinForms UI chưa triển khai.
 
 Demo: load khóa 32 byte đã có hoặc sinh và lưu khóa nếu chưa có file. File nằm tại `keys/aes-demo.key` trong thư mục output của ứng dụng (mặc định: `information-security-toolkit/bin/Debug/net10.0/keys/aes-demo.key`) và đã được `.gitignore` bỏ qua. File khóa lỗi được báo ra Console, không tự ghi đè.
 
@@ -46,6 +46,12 @@ File khóa là văn bản Base64, **không được mã hóa**. Chỉ dùng khó
 
 `PemAnalyzer` lấy `RSAParameters` và in Base64/số byte: public `(n, e)`, private `(n, e, d, p, q, dp, dq, inverseQ)`; exponent còn được hiển thị dạng số. Lệnh `rsa keys` sinh/export/import lại khóa, so sánh modulus/exponent và kiểm tra các đầu vào lỗi. PEM local nằm trong `keys/rsa/run-<id>/`, đã được Git ignore. Demo in cả tham số private ra Console và lưu private PEM không mã hóa; chỉ dùng khóa thử nghiệm và giữ bí mật các giá trị này.
 
+`RsaCryptoService` mã hóa bằng thao tác public RSA và giải mã bằng private RSA với **OAEP-SHA256**. `GetMaxPlaintextSize` tính `k - 2×SHA256.HashSizeInBytes - 2`: RSA-2048 có `k = 256`, nhận tối đa **190 byte**, ciphertext **256 byte**. API hỗ trợ các khóa 2048/3072/4096 bit của `RsaKeyManager`; từ chối plaintext null/rỗng/vượt giới hạn và ciphertext sai độ dài. Sai khóa, public-only key khi decrypt hoặc ciphertext bị sửa đều báo lỗi rõ ràng.
+
+Lệnh `rsa crypto` tạo cặp PEM thử nghiệm mới rồi import lại; mã hóa 32 byte ngẫu nhiên giả lập AES-256 key, lưu Base64 thuần trong `results/rsa/run-<id>/rsa-encrypted.txt`, đọc lại, giải mã và so sánh. PEM tương ứng ở `keys/rsa/run-<id>/`. Demo kiểm tra 1/32/100/max byte, text nhỏ, sai khóa, sửa ciphertext và vượt giới hạn; giữ nguyên các kết quả cũ. Không dùng khóa AES thật từ các demo trước.
+
+OAEP thêm ngẫu nhiên và kiểm tra cấu trúc mã hóa khi giải mã. RSA có giới hạn đầu vào theo modulus/padding và phù hợp với dữ liệu nhỏ như khóa AES; file lớn sẽ cần mã hóa đối xứng. Ví dụ 32 byte ở đây chỉ minh họa bọc khóa, chưa triển khai hybrid encryption hoàn chỉnh.
+
 Build và chạy từ thư mục root:
 
 ```powershell
@@ -54,6 +60,9 @@ dotnet run --project information-security-toolkit/information-security-toolkit.c
 
 # RSA Key Management + PEM
 dotnet run --project information-security-toolkit/information-security-toolkit.csproj -- rsa keys
+
+# RSA Encrypt / Decrypt dữ liệu nhỏ
+dotnet run --project information-security-toolkit/information-security-toolkit.csproj -- rsa crypto
 
 # Quick benchmark (khuyên dùng Release khi thu thập số liệu)
 dotnet run -c Release --project information-security-toolkit/information-security-toolkit.csproj -- benchmark quick

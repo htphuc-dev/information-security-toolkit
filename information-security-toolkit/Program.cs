@@ -13,18 +13,27 @@ bool benchmarkRequested = args.Length == 2
 bool rsaKeysRequested = args.Length == 2
     && string.Equals(args[0], "rsa", StringComparison.OrdinalIgnoreCase)
     && string.Equals(args[1], "keys", StringComparison.OrdinalIgnoreCase);
-if (args.Length != 0 && !benchmarkRequested && !rsaKeysRequested)
+bool rsaCryptoRequested = args.Length == 2
+    && string.Equals(args[0], "rsa", StringComparison.OrdinalIgnoreCase)
+    && string.Equals(args[1], "crypto", StringComparison.OrdinalIgnoreCase);
+if (args.Length != 0 && !benchmarkRequested && !rsaKeysRequested && !rsaCryptoRequested)
 {
-    Console.Error.WriteLine("Usage: dotnet run --project information-security-toolkit/information-security-toolkit.csproj -- [benchmark quick|full | rsa keys]");
+    Console.Error.WriteLine("Usage: dotnet run --project information-security-toolkit/information-security-toolkit.csproj -- [benchmark quick|full | rsa keys|crypto]");
     return 1;
 }
 
-Console.WriteLine(rsaKeysRequested ? "RSA KEY MANAGEMENT DEMO"
+Console.WriteLine(rsaCryptoRequested ? "RSA ENCRYPT / DECRYPT DEMO"
+    : rsaKeysRequested ? "RSA KEY MANAGEMENT DEMO"
     : benchmarkRequested ? "AES FILE BENCHMARK" : "AES File Encryption Demo");
 
 try
 {
     string repositoryRoot = FindRepositoryRoot();
+    if (rsaCryptoRequested)
+    {
+        return RunRsaCryptoDemo(repositoryRoot);
+    }
+
     if (rsaKeysRequested)
     {
         return RunRsaKeyDemo(repositoryRoot);
@@ -148,7 +157,8 @@ try
 catch (Exception ex) when (ex is ArgumentException or FormatException or CryptographicException
     or IOException or UnauthorizedAccessException or NotSupportedException or InvalidOperationException)
 {
-    string operation = rsaKeysRequested ? "RSA key management" : benchmarkRequested ? "AES benchmark" : "AES file demo";
+    string operation = rsaCryptoRequested ? "RSA encryption demo"
+        : rsaKeysRequested ? "RSA key management" : benchmarkRequested ? "AES benchmark" : "AES file demo";
     Console.Error.WriteLine($"{operation}: FAIL — {ex.Message}");
     return 1;
 }
@@ -221,21 +231,114 @@ static int RunRsaKeyDemo(string repositoryRoot)
     bool passed = publicMatch && privateMatch && exponentsMatch;
     Console.WriteLine($"\nRSA key management result: {(passed ? "PASS" : "FAIL")}");
     return passed ? 0 : 1;
+}
 
-    static void ExpectRejected<T>(string label, Action action) where T : Exception
+static int RunRsaCryptoDemo(string repositoryRoot)
+{
+    string runId = Guid.NewGuid().ToString("N");
+    string keyDirectory = Path.Combine(repositoryRoot, "keys", "rsa", $"run-{runId}");
+    string outputDirectory = Path.Combine(repositoryRoot, "results", "rsa", $"run-{runId}");
+    Directory.CreateDirectory(keyDirectory);
+    Directory.CreateDirectory(outputDirectory);
+    string publicPath = Path.Combine(keyDirectory, "rsa-public.pem");
+    string privatePath = Path.Combine(keyDirectory, "rsa-private.pem");
+    using (var generated = RsaKeyManager.GenerateKeyPair())
     {
-        try
+        RsaKeyManager.ExportPublicKey(generated, publicPath);
+        RsaKeyManager.ExportPrivateKey(generated, privatePath);
+    }
+
+    using var publicKey = RsaKeyManager.LoadPublicKey(publicPath);
+    using var privateKey = RsaKeyManager.LoadPrivateKey(privatePath);
+    int maximumSize = RsaCryptoService.GetMaxPlaintextSize(publicKey);
+    Console.WriteLine("Public/private PEM imported: PASS");
+    Console.WriteLine($"Key size: {publicKey.KeySize} bits\nPadding: OAEP-SHA256");
+    Console.WriteLine($"Max plaintext size: {maximumSize} bytes");
+
+    // Fresh demonstration data only; do not use the AES key from another exercise.
+    byte[] data = RandomNumberGenerator.GetBytes(32);
+    Console.WriteLine($"Original data length: {data.Length} bytes");
+    byte[] ciphertext = RsaCryptoService.Encrypt(data, publicKey);
+    Console.WriteLine($"Encryption: PASS\nCiphertext length: {ciphertext.Length} bytes");
+    string base64 = Convert.ToBase64String(ciphertext);
+    Console.WriteLine($"Ciphertext Base64: {base64}");
+    string ciphertextPath = Path.Combine(outputDirectory, "rsa-encrypted.txt");
+    using (var file = new FileStream(ciphertextPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+    using (var writer = new StreamWriter(file, new UTF8Encoding(false)))
+    {
+        writer.Write(base64);
+    }
+
+    Console.WriteLine($"Base64 saved: PASS — {ciphertextPath}");
+    byte[] loadedCiphertext = Convert.FromBase64String(File.ReadAllText(ciphertextPath));
+    if (!ciphertext.AsSpan().SequenceEqual(loadedCiphertext))
+    {
+        throw new InvalidDataException("The saved Base64 ciphertext does not match the encrypted bytes.");
+    }
+
+    Console.WriteLine("Base64 loaded: PASS");
+    byte[] decrypted = RsaCryptoService.Decrypt(loadedCiphertext, privateKey);
+    Console.WriteLine("Decryption: PASS");
+    if (!CryptographicOperations.FixedTimeEquals(data, decrypted))
+    {
+        throw new InvalidOperationException("Original vs decrypted: FAIL");
+    }
+
+    Console.WriteLine("Original vs decrypted: PASS");
+    Console.WriteLine("\nPlaintext size checks");
+    foreach (int size in new[] { 1, 32, 100, maximumSize })
+    {
+        byte[] sample = RandomNumberGenerator.GetBytes(size);
+        byte[] encrypted = RsaCryptoService.Encrypt(sample, publicKey);
+        byte[] recovered = RsaCryptoService.Decrypt(encrypted, privateKey);
+        if (!CryptographicOperations.FixedTimeEquals(sample, recovered))
         {
-            action();
-        }
-        catch (T ex)
-        {
-            Console.WriteLine($"{label}: PASS — {ex.Message}");
-            return;
+            throw new InvalidOperationException($"{size}-byte round-trip: FAIL");
         }
 
-        throw new InvalidOperationException($"{label}: expected input rejection.");
+        Console.WriteLine($"{size} byte{(size == maximumSize ? " (max allowed)" : "")}: PASS");
     }
+
+    string text = "Hello RSA";
+    byte[] textCiphertext = RsaCryptoService.Encrypt(Encoding.UTF8.GetBytes(text), publicKey);
+    string recoveredText = Encoding.UTF8.GetString(RsaCryptoService.Decrypt(textCiphertext, privateKey));
+    if (!string.Equals(text, recoveredText, StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("Small UTF-8 text round-trip: FAIL");
+    }
+
+    Console.WriteLine("Hello RSA text round-trip: PASS");
+    Console.WriteLine("\nRSA failure handling checks");
+    using var wrongPrivateKey = RsaKeyManager.GenerateKeyPair();
+    ExpectRejected<CryptographicException>("Wrong key rejected",
+        () => RsaCryptoService.Decrypt(ciphertext, wrongPrivateKey));
+    byte[] tamperedCiphertext = (byte[])ciphertext.Clone();
+    tamperedCiphertext[tamperedCiphertext.Length / 2] ^= 1;
+    ExpectRejected<CryptographicException>("Tampered ciphertext rejected",
+        () => RsaCryptoService.Decrypt(tamperedCiphertext, privateKey));
+    ExpectRejected<ArgumentException>("Oversized plaintext rejected",
+        () => RsaCryptoService.Encrypt(RandomNumberGenerator.GetBytes(maximumSize + 1), publicKey));
+    ExpectRejected<CryptographicException>("Public-only key cannot decrypt",
+        () => RsaCryptoService.Decrypt(ciphertext, publicKey));
+    ExpectRejected<ArgumentException>("Invalid ciphertext length rejected",
+        () => RsaCryptoService.Decrypt(ciphertext[..^1], privateKey));
+    Console.WriteLine("\nRSA encryption demo: PASS");
+    return 0;
+}
+
+static void ExpectRejected<T>(string label, Action action) where T : Exception
+{
+    try
+    {
+        action();
+    }
+    catch (T ex)
+    {
+        Console.WriteLine($"{label}: PASS — {ex.Message}");
+        return;
+    }
+
+    throw new InvalidOperationException($"{label}: expected input rejection.");
 }
 
 static string FindRepositoryRoot()
