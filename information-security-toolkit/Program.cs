@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using information_security_toolkit.AES;
 using information_security_toolkit.Benchmark;
+using information_security_toolkit.Hashing;
 using information_security_toolkit.RSA;
 
 Console.OutputEncoding = Encoding.UTF8;
@@ -16,18 +17,27 @@ bool rsaKeysRequested = args.Length == 2
 bool rsaCryptoRequested = args.Length == 2
     && string.Equals(args[0], "rsa", StringComparison.OrdinalIgnoreCase)
     && string.Equals(args[1], "crypto", StringComparison.OrdinalIgnoreCase);
-if (args.Length != 0 && !benchmarkRequested && !rsaKeysRequested && !rsaCryptoRequested)
+bool sha256Requested = args.Length == 2
+    && string.Equals(args[0], "hash", StringComparison.OrdinalIgnoreCase)
+    && string.Equals(args[1], "sha256", StringComparison.OrdinalIgnoreCase);
+if (args.Length != 0 && !benchmarkRequested && !rsaKeysRequested && !rsaCryptoRequested && !sha256Requested)
 {
-    Console.Error.WriteLine("Usage: dotnet run --project information-security-toolkit/information-security-toolkit.csproj -- [benchmark quick|full | rsa keys|crypto]");
+    Console.Error.WriteLine("Usage: dotnet run --project information-security-toolkit/information-security-toolkit.csproj -- [benchmark quick|full | rsa keys|crypto | hash sha256]");
     return 1;
 }
 
-Console.WriteLine(rsaCryptoRequested ? "RSA ENCRYPT / DECRYPT DEMO"
+Console.WriteLine(sha256Requested ? "SHA-256 DEMO"
+    : rsaCryptoRequested ? "RSA ENCRYPT / DECRYPT DEMO"
     : rsaKeysRequested ? "RSA KEY MANAGEMENT DEMO"
     : benchmarkRequested ? "AES FILE BENCHMARK" : "AES File Encryption Demo");
 
 try
 {
+    if (sha256Requested)
+    {
+        return RunSha256Demo();
+    }
+
     string repositoryRoot = FindRepositoryRoot();
     if (rsaCryptoRequested)
     {
@@ -157,10 +167,86 @@ try
 catch (Exception ex) when (ex is ArgumentException or FormatException or CryptographicException
     or IOException or UnauthorizedAccessException or NotSupportedException or InvalidOperationException)
 {
-    string operation = rsaCryptoRequested ? "RSA encryption demo"
+    string operation = sha256Requested ? "SHA-256 avalanche demo"
+        : rsaCryptoRequested ? "RSA encryption demo"
         : rsaKeysRequested ? "RSA key management" : benchmarkRequested ? "AES benchmark" : "AES file demo";
     Console.Error.WriteLine($"{operation}: FAIL — {ex.Message}");
     return 1;
+}
+
+static int RunSha256Demo()
+{
+    string input = "hello";
+    string hash = Sha256Service.ComputeHash(input);
+    byte[] hashBytes = Convert.FromHexString(hash);
+    Console.WriteLine($"Input: {input}\nSHA-256: {hash}");
+    Console.WriteLine($"Hash length: {hashBytes.Length * 8} bits / {hashBytes.Length} bytes / {hash.Length} hex characters");
+    Check(hashBytes.Length == Sha256Service.HashSizeInBytes
+        && hash.Length == Sha256Service.HashSizeInBytes * 2, "Hash length test");
+    Check(string.Equals(hash, Sha256Service.ComputeHash(input), StringComparison.Ordinal), "Deterministic hash test");
+
+    string emptyHash = Sha256Service.ComputeHash(string.Empty);
+    Console.WriteLine($"\nEmpty string SHA-256: {emptyHash}");
+    Check(emptyHash.Length == Sha256Service.HashSizeInBytes * 2
+        && Convert.FromHexString(emptyHash).Length == Sha256Service.HashSizeInBytes, "Empty string test");
+    Check(string.Equals(emptyHash, Sha256Service.ComputeHash(Array.Empty<byte>()), StringComparison.Ordinal),
+        "Empty byte array test");
+
+    string unicode = "Xin chào! Tiếng Việt — 日本語 — 🔐🌍";
+    string unicodeHash = Sha256Service.ComputeHash(unicode);
+    Console.WriteLine($"\nUnicode input: {unicode}\nSHA-256: {unicodeHash}");
+    Check(unicodeHash.Length == Sha256Service.HashSizeInBytes * 2
+        && string.Equals(unicodeHash, Sha256Service.ComputeHash(Encoding.UTF8.GetBytes(unicode)), StringComparison.Ordinal),
+        "Unicode UTF-8 string/byte hash test");
+
+    Console.WriteLine("\nAVALANCHE EFFECT TEST");
+    (string InputA, string InputB)[] comparisons = [
+        ("hello", "Hello"),
+        ("Hello world", "Hello worle"),
+        ("abc", "abd"),
+        ("An toàn và bảo mật thông tin", "An toàn và bảo mật thông tio")
+    ];
+    for (int index = 0; index < comparisons.Length; index++)
+    {
+        ShowComparison($"Test {index + 1}", comparisons[index].InputA, comparisons[index].InputB);
+    }
+
+    ShowComparison("Identical inputs", "hello", "hello");
+    ExpectRejected<ArgumentNullException>("Null string rejected",
+        () => Sha256Service.ComputeHash((string)null!));
+    ExpectRejected<ArgumentNullException>("Null byte array rejected",
+        () => Sha256Service.ComputeHash((byte[])null!));
+    ExpectRejected<ArgumentException>("Invalid SHA-256 hash length rejected",
+        () => Sha256Service.CountDifferentBits(new byte[Sha256Service.HashSizeInBytes - 1], hashBytes));
+    Console.WriteLine("\nSHA-256 avalanche demo: PASS");
+    return 0;
+
+    static void ShowComparison(string label, string inputA, string inputB)
+    {
+        string hashA = Sha256Service.ComputeHash(inputA);
+        string hashB = Sha256Service.ComputeHash(inputB);
+        int differentBits = Sha256Service.CountDifferentBits(Convert.FromHexString(hashA), Convert.FromHexString(hashB));
+        double differencePercentage = differentBits / (double)Sha256Service.HashSizeInBits * 100;
+        bool identicalInputs = string.Equals(inputA, inputB, StringComparison.Ordinal);
+        bool hashesEqual = string.Equals(hashA, hashB, StringComparison.Ordinal);
+        Console.WriteLine($"\n{label}\nInput A: {inputA}\nInput B: {inputB}");
+        Console.WriteLine($"Hash A: {hashA}\nHash B: {hashB}");
+        Console.WriteLine($"Different bits (Hamming distance): {differentBits} / {Sha256Service.HashSizeInBits}");
+        Console.WriteLine($"Difference: {differencePercentage:F2}%");
+        // Avalanche examples require different hashes; the percentage is measured, not forced to 50%.
+        bool passed = identicalInputs ? hashesEqual && differentBits == 0 && differencePercentage == 0
+            : !hashesEqual && differentBits > 0;
+        Check(passed, identicalInputs ? "Identical inputs test" : "Hashes are different");
+    }
+
+    static void Check(bool passed, string label)
+    {
+        Console.WriteLine($"{label}: {(passed ? "PASS" : "FAIL")}");
+        if (!passed)
+        {
+            throw new InvalidOperationException($"{label} failed.");
+        }
+    }
 }
 
 static int RunRsaKeyDemo(string repositoryRoot)

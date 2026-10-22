@@ -16,7 +16,7 @@ Các module dự kiến:
 
 `Common` dành cho tiện ích dùng chung; `docs/screenshots` lưu ảnh minh họa; `test-data` lưu dữ liệu thử; `results` lưu kết quả.
 
-Trạng thái hiện tại: **Milestone 4 — RSA Encryption/Decryption**. Đã hoàn thành các phần AES, quản lý khóa RSA/PEM và RSA encrypt/decrypt dữ liệu nhỏ. RSA benchmark, module SHA-256 riêng, chữ ký số và WinForms UI chưa triển khai.
+Trạng thái hiện tại: **Milestone 6 — SHA-256 + Avalanche Effect**. Đã có AES, quản lý khóa RSA/PEM, RSA encrypt/decrypt dữ liệu nhỏ và SHA-256. Checkout hiện tại chưa có RSA benchmark; chữ ký số và WinForms UI chưa triển khai.
 
 Demo: load khóa 32 byte đã có hoặc sinh và lưu khóa nếu chưa có file. File nằm tại `keys/aes-demo.key` trong thư mục output của ứng dụng (mặc định: `information-security-toolkit/bin/Debug/net10.0/keys/aes-demo.key`) và đã được `.gitignore` bỏ qua. File khóa lỗi được báo ra Console, không tự ghi đè.
 
@@ -36,7 +36,7 @@ Output luôn là file mới: ghi vào file `.tmp` cùng thư mục, chỉ chuy�
 
 Benchmark chỉ chạy khi truyền `benchmark quick` (1/10 MB) hoặc `benchmark full` (100/500 MB, 1 GB). Quy ước: 1 MB = 1.000.000 byte, 1 GB = 1.000 MB. Không có tham số vẫn chạy demo file nhỏ. Dữ liệu được sinh theo chunk 1 MiB (lặp lại một block ngẫu nhiên), lưu trong `test-data/benchmark/`; file đúng kích thước được tái sử dụng, file sai kích thước được báo lỗi và giữ nguyên.
 
-Sau warm-up 64 KiB, mỗi file được đo một lần bằng hai `Stopwatch` riêng cho encrypt/decrypt; không tính tạo file, SHA-256 hoặc ghi CSV vào thời gian đo. Throughput MB/s = kích thước nguồn MB / thời gian giây. Đo toàn bộ thao tác AES-CBC + HMAC và I/O; cache của hệ điều hành có thể ảnh hưởng số liệu. Kích thước và SHA-256 streaming của nguồn/giải mã phải trùng nhau; SHA-256 ở đây chỉ phục vụ xác minh benchmark, chưa phải module bài tập riêng.
+Sau warm-up 64 KiB, mỗi file được đo một lần bằng hai `Stopwatch` riêng cho encrypt/decrypt; không tính tạo file, SHA-256 hoặc ghi CSV vào thời gian đo. Throughput MB/s = kích thước nguồn MB / thời gian giây. Đo toàn bộ thao tác AES-CBC + HMAC và I/O; cache của hệ điều hành có thể ảnh hưởng số liệu. Kích thước và SHA-256 streaming của nguồn/giải mã phải trùng nhau; hashing trong benchmark chỉ phục vụ xác minh file.
 
 Output nằm trong `results/benchmark/run-<RunId>/`; CSV `results/benchmark/aes-benchmark.csv` append thời gian UTC, tên/kích thước file, thời gian ms, throughput, hai SHA-256, integrity/PASS/FAIL, mode và RunId. CSV dùng dấu chấm thập phân để đọc nhất quán. Giữ nguyên kết quả cũ; benchmark kiểm tra dung lượng trống trước khi chạy. Full lần đầu có thể dùng hơn 4,8 GB cho nguồn + mã hóa + giải mã; chỉ chạy khi chọn rõ `full`. Dữ liệu/CSV benchmark đều được Git ignore. Full mode để chạy thủ công sau.
 
@@ -52,6 +52,10 @@ Lệnh `rsa crypto` tạo cặp PEM thử nghiệm mới rồi import lại; mã
 
 OAEP thêm ngẫu nhiên và kiểm tra cấu trúc mã hóa khi giải mã. RSA có giới hạn đầu vào theo modulus/padding và phù hợp với dữ liệu nhỏ như khóa AES; file lớn sẽ cần mã hóa đối xứng. Ví dụ 32 byte ở đây chỉ minh họa bọc khóa, chưa triển khai hybrid encryption hoàn chỉnh.
 
+`Sha256Service` hash UTF-8 string hoặc `byte[]` bằng `System.Security.Cryptography`, trả **Hex uppercase: 64 ký tự = 32 byte = 256 bit**. Cùng input cho cùng hash; chuỗi/mảng rỗng hợp lệ, `null` bị từ chối. UTF-8 giữ nguyên Unicode, không tự chuẩn hóa văn bản; UTF-16 không hợp lệ bị từ chối thay vì thay ký tự.
+
+Lệnh `hash sha256` minh họa deterministic hashing, empty/Unicode, bốn cặp chỉ khác một ký tự và input giống nhau. **Hamming distance** là số bit khác nhau tại cùng vị trí: XOR hai hash 32 byte rồi đếm bit 1; phần trăm = `DifferentBits / 256.0 × 100`. Thay đổi nhỏ ở input thường làm nhiều bit output thay đổi; demo PASS khi hash khác, không bắt buộc đúng 50%. Input giống nhau phải có khoảng cách 0 và 0%. Kết quả in ra Console, không tạo CSV hay benchmark SHA-256 lớn. Không dùng SHA-256 trực tiếp để lưu password trong ứng dụng thực tế; giai đoạn này không triển khai password hashing.
+
 Build và chạy từ thư mục root:
 
 ```powershell
@@ -63,6 +67,9 @@ dotnet run --project information-security-toolkit/information-security-toolkit.c
 
 # RSA Encrypt / Decrypt dữ liệu nhỏ
 dotnet run --project information-security-toolkit/information-security-toolkit.csproj -- rsa crypto
+
+# SHA-256 + Avalanche Effect
+dotnet run --project information-security-toolkit/information-security-toolkit.csproj -- hash sha256
 
 # Quick benchmark (khuyên dùng Release khi thu thập số liệu)
 dotnet run -c Release --project information-security-toolkit/information-security-toolkit.csproj -- benchmark quick
