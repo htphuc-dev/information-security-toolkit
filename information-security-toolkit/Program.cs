@@ -4,6 +4,8 @@ using information_security_toolkit.AES;
 using information_security_toolkit.Benchmark;
 using information_security_toolkit.Hashing;
 using information_security_toolkit.RSA;
+using information_security_toolkit.Signature;
+using Rsa = System.Security.Cryptography.RSA;
 
 Console.OutputEncoding = Encoding.UTF8;
 Console.WriteLine("Information Security Toolkit");
@@ -26,14 +28,18 @@ bool rsaBenchmarkRequested = args.Length == 3
 bool sha256Requested = args.Length == 2
     && string.Equals(args[0], "hash", StringComparison.OrdinalIgnoreCase)
     && string.Equals(args[1], "sha256", StringComparison.OrdinalIgnoreCase);
+bool signatureRequested = args.Length == 2
+    && string.Equals(args[0], "signature", StringComparison.OrdinalIgnoreCase)
+    && string.Equals(args[1], "demo", StringComparison.OrdinalIgnoreCase);
 if (args.Length != 0 && !benchmarkRequested && !rsaKeysRequested && !rsaCryptoRequested
-    && !rsaBenchmarkRequested && !sha256Requested)
+    && !rsaBenchmarkRequested && !sha256Requested && !signatureRequested)
 {
-    Console.Error.WriteLine("Usage: dotnet run --project information-security-toolkit/information-security-toolkit.csproj -- [benchmark quick|full | rsa keys|crypto | rsa benchmark quick|normal|extended | hash sha256]");
+    Console.Error.WriteLine("Usage: dotnet run --project information-security-toolkit/information-security-toolkit.csproj -- [benchmark quick|full | rsa keys|crypto | rsa benchmark quick|normal|extended | hash sha256 | signature demo]");
     return 1;
 }
 
-Console.WriteLine(sha256Requested ? "SHA-256 DEMO"
+Console.WriteLine(signatureRequested ? "DIGITAL SIGNATURE — RSA-PSS"
+    : sha256Requested ? "SHA-256 DEMO"
     : rsaBenchmarkRequested ? "RSA PERFORMANCE BENCHMARK"
     : rsaCryptoRequested ? "RSA ENCRYPT / DECRYPT DEMO"
     : rsaKeysRequested ? "RSA KEY MANAGEMENT DEMO"
@@ -41,6 +47,11 @@ Console.WriteLine(sha256Requested ? "SHA-256 DEMO"
 
 try
 {
+    if (signatureRequested)
+    {
+        return RunDigitalSignatureDemo();
+    }
+
     if (sha256Requested)
     {
         return RunSha256Demo();
@@ -181,12 +192,92 @@ try
 catch (Exception ex) when (ex is ArgumentException or FormatException or CryptographicException
     or IOException or UnauthorizedAccessException or NotSupportedException or InvalidOperationException)
 {
-    string operation = sha256Requested ? "SHA-256 avalanche demo"
+    string operation = signatureRequested ? "Digital signature demo"
+        : sha256Requested ? "SHA-256 avalanche demo"
         : rsaBenchmarkRequested ? "RSA benchmark"
         : rsaCryptoRequested ? "RSA encryption demo"
         : rsaKeysRequested ? "RSA key management" : benchmarkRequested ? "AES benchmark" : "AES file demo";
     Console.Error.WriteLine($"{operation}: FAIL — {ex.Message}");
     return 1;
+}
+
+static int RunDigitalSignatureDemo()
+{
+    using var privateKey = RsaKeyManager.GenerateKeyPair(2048);
+    using var publicKey = Rsa.Create();
+    publicKey.ImportParameters(privateKey.ExportParameters(includePrivateParameters: false));
+    Console.WriteLine("----------------------------------------");
+    Console.WriteLine($"RSA key size: {privateKey.KeySize} bits\nHash: SHA-256\nPadding: RSA-PSS");
+
+    string originalText = "Information Security Toolkit";
+    byte[] data = Encoding.UTF8.GetBytes(originalText);
+    Console.WriteLine($"\nOriginal data:\n{originalText}");
+    byte[] signature = DigitalSignatureService.SignData(data, privateKey);
+    Check(signature.Length == privateKey.KeySize / 8, "Signature created");
+    Console.WriteLine($"Signature:\n{Convert.ToBase64String(signature)}");
+    Check(DigitalSignatureService.VerifyData(data, signature, publicKey), "Verify original");
+
+    byte[] modifiedData = Encoding.UTF8.GetBytes("Information Security Toolkiv");
+    Check(!DigitalSignatureService.VerifyData(modifiedData, signature, publicKey), "Modified data rejected");
+
+    using var otherKeyPair = RsaKeyManager.GenerateKeyPair(2048);
+    using var wrongPublicKey = Rsa.Create();
+    wrongPublicKey.ImportParameters(otherKeyPair.ExportParameters(includePrivateParameters: false));
+    Check(!DigitalSignatureService.VerifyData(data, signature, wrongPublicKey), "Wrong public key rejected");
+
+    byte[] tamperedSignature = (byte[])signature.Clone();
+    tamperedSignature[tamperedSignature.Length / 2] ^= 1;
+    Check(!DigitalSignatureService.VerifyData(data, tamperedSignature, publicKey), "Tampered signature rejected");
+
+    byte[] emptyData = [];
+    byte[] emptySignature = DigitalSignatureService.SignData(emptyData, privateKey);
+    Check(DigitalSignatureService.VerifyData(emptyData, emptySignature, publicKey), "Empty data signature");
+    string unicodeText = "An toàn và bảo mật thông tin ✓";
+    byte[] unicodeData = Encoding.UTF8.GetBytes(unicodeText);
+    byte[] unicodeSignature = DigitalSignatureService.SignData(unicodeData, privateKey);
+    Console.WriteLine($"\nUnicode data: {unicodeText}");
+    Check(DigitalSignatureService.VerifyData(unicodeData, unicodeSignature, publicKey), "Unicode signature");
+
+    Console.WriteLine("\nRANDOMIZED SIGNATURE TEST\n----------------------------------------");
+    Console.WriteLine("Same data: YES\nSame private key: YES");
+    // Both signatures use the exact same data array and private-key object.
+    byte[] secondSignature = DigitalSignatureService.SignData(data, privateKey);
+    Console.WriteLine($"\nSignature #1:\n{Convert.ToBase64String(signature)}");
+    Console.WriteLine($"\nSignature #2:\n{Convert.ToBase64String(secondSignature)}");
+    Check(!signature.AsSpan().SequenceEqual(secondSignature), "Signatures different");
+    Check(DigitalSignatureService.VerifyData(data, signature, publicKey), "Signature #1 verify");
+    Check(DigitalSignatureService.VerifyData(data, secondSignature, publicKey), "Signature #2 verify");
+    Console.WriteLine("RSA-PSS randomized signature test: PASS");
+    Console.WriteLine("RSA-PSS uses a random salt: the same data and private key can produce different signatures.");
+    Console.WriteLine("Both valid signatures can be verified using the corresponding public key.");
+
+    Console.WriteLine("\nInput validation checks");
+    ExpectRejected<CryptographicException>("Public-only key cannot sign",
+        () => DigitalSignatureService.SignData(data, publicKey));
+    Check(!DigitalSignatureService.VerifyData(data, [], publicKey), "Empty signature rejected");
+    Check(!DigitalSignatureService.VerifyData(data, signature[..^1], publicKey), "Truncated signature rejected");
+    ExpectRejected<ArgumentNullException>("Null signing data rejected",
+        () => DigitalSignatureService.SignData(null!, privateKey));
+    ExpectRejected<ArgumentNullException>("Null private key rejected",
+        () => DigitalSignatureService.SignData(data, null!));
+    ExpectRejected<ArgumentNullException>("Null verification data rejected",
+        () => DigitalSignatureService.VerifyData(null!, signature, publicKey));
+    ExpectRejected<ArgumentNullException>("Null signature rejected",
+        () => DigitalSignatureService.VerifyData(data, null!, publicKey));
+    ExpectRejected<ArgumentNullException>("Null public key rejected",
+        () => DigitalSignatureService.VerifyData(data, signature, null!));
+
+    Console.WriteLine("\nDigital signature demo: PASS");
+    return 0;
+
+    static void Check(bool passed, string label)
+    {
+        Console.WriteLine($"{label}: {(passed ? "PASS" : "FAIL")}");
+        if (!passed)
+        {
+            throw new InvalidOperationException($"{label} failed.");
+        }
+    }
 }
 
 static int RunSha256Demo()

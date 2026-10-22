@@ -11,12 +11,12 @@ Các module dự kiến:
 - **AES**: sinh, lưu/import khóa; mã hóa/giải mã văn bản và file.
 - **RSA**: sinh cặp khóa, export/import PEM, đọc tham số và mã hóa/giải mã dữ liệu nhỏ.
 - **SHA-256** (`Hashing`): băm dữ liệu và quan sát avalanche effect.
-- **Digital Signature** (`Signature`): ký/xác minh RSA; bổ sung RSA-PSS ở giai đoạn sau.
+- **Digital Signature** (`Signature`): ký/xác minh RSA-PSS với SHA-256.
 - **Benchmark**: đo hiệu năng và so sánh file nguồn với file sau giải mã.
 
 `Common` dành cho tiện ích dùng chung; `docs/screenshots` lưu ảnh minh họa; `test-data` lưu dữ liệu thử; `results` lưu kết quả.
 
-Trạng thái hiện tại: **Đã hoàn thành giai đoạn 1–6**, gồm AES, quản lý khóa RSA/PEM, RSA encrypt/decrypt dữ liệu nhỏ, RSA benchmark và SHA-256 + Avalanche Effect. Chữ ký số và WinForms UI chưa triển khai.
+Trạng thái hiện tại: **Đã hoàn thành giai đoạn 1–7**, gồm AES, quản lý khóa RSA/PEM, RSA encrypt/decrypt dữ liệu nhỏ, RSA benchmark, SHA-256 + Avalanche Effect và chữ ký số RSA-PSS. WinForms UI chưa triển khai.
 
 Demo: load khóa 32 byte đã có hoặc sinh và lưu khóa nếu chưa có file. File nằm tại `keys/aes-demo.key` trong thư mục output của ứng dụng (mặc định: `information-security-toolkit/bin/Debug/net10.0/keys/aes-demo.key`) và đã được `.gitignore` bỏ qua. File khóa lỗi được báo ra Console, không tự ghi đè.
 
@@ -62,6 +62,10 @@ Public key là `(n, e)`, với `e` thường nhỏ (phổ biến 65537); private
 
 Lệnh `hash sha256` minh họa deterministic hashing, empty/Unicode, bốn cặp chỉ khác một ký tự và input giống nhau. **Hamming distance** là số bit khác nhau tại cùng vị trí: XOR hai hash 32 byte rồi đếm bit 1; phần trăm = `DifferentBits / 256.0 × 100`. Thay đổi nhỏ ở input thường làm nhiều bit output thay đổi; demo PASS khi hash khác, không bắt buộc đúng 50%. Input giống nhau phải có khoảng cách 0 và 0%. Kết quả in ra Console, không tạo CSV hay benchmark SHA-256 lớn. Không dùng SHA-256 trực tiếp để lưu password trong ứng dụng thực tế; giai đoạn này không triển khai password hashing.
 
+`DigitalSignatureService.SignData(byte[], RSA)` dùng private key để tạo chữ ký **RSA-PSS + SHA-256**; `VerifyData(byte[], byte[], RSA)` xác minh bằng public key và trả `bool`. API `RSA.SignData`/`VerifyData` của .NET tự hash dữ liệu bằng SHA-256, không cần hash trước rồi truyền vào `SignData`. Dữ liệu rỗng hợp lệ, `null` bị từ chối; ký bằng public-only key báo lỗi rõ ràng. Dữ liệu/chữ ký bị sửa, sai public key và chữ ký sai độ dài trả `false`; lỗi cấu hình/provider vẫn được báo bằng exception.
+
+Lệnh `signature demo` tạo khóa **RSA-2048** trong bộ nhớ, tách public parameters để verify, ký dữ liệu gốc, dữ liệu rỗng và Unicode UTF-8. Chữ ký được in dạng Base64 ra Console; không lưu khóa hay output xuống file. Demo kiểm tra dữ liệu bị sửa, sai public key, chữ ký bị sửa và **hai lần ký cùng dữ liệu với cùng private key**: chữ ký khác nhau, cả hai vẫn verify PASS. RSA-PSS dùng **random salt** trong quá trình tạo chữ ký nên có tính ngẫu nhiên; thư viện chuẩn quản lý salt ([RFC 8017, mục 8.1](https://www.rfc-editor.org/rfc/rfc8017.html#section-8.1)). Giai đoạn này chưa triển khai certificate/PKI, ký file hay benchmark chữ ký.
+
 Build và chạy từ thư mục root:
 
 ```powershell
@@ -76,6 +80,9 @@ dotnet run --project information-security-toolkit/information-security-toolkit.c
 
 # SHA-256 + Avalanche Effect
 dotnet run --project information-security-toolkit/information-security-toolkit.csproj -- hash sha256
+
+# Digital Signature — RSA-2048 / SHA-256 / RSA-PSS
+dotnet run --project information-security-toolkit/information-security-toolkit.csproj -- signature demo
 
 # RSA Benchmark: quick=100, normal=1000, extended=10000 lần; chỉ chạy mức được chọn
 dotnet run -c Release --project information-security-toolkit/information-security-toolkit.csproj -- rsa benchmark quick
