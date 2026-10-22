@@ -16,7 +16,7 @@ Các module dự kiến:
 
 `Common` dành cho tiện ích dùng chung; `docs/screenshots` lưu ảnh minh họa; `test-data` lưu dữ liệu thử; `results` lưu kết quả.
 
-Trạng thái hiện tại: **Milestone 6 — SHA-256 + Avalanche Effect**. Đã có AES, quản lý khóa RSA/PEM, RSA encrypt/decrypt dữ liệu nhỏ và SHA-256. Checkout hiện tại chưa có RSA benchmark; chữ ký số và WinForms UI chưa triển khai.
+Trạng thái hiện tại: **Đã hoàn thành giai đoạn 1–6**, gồm AES, quản lý khóa RSA/PEM, RSA encrypt/decrypt dữ liệu nhỏ, RSA benchmark và SHA-256 + Avalanche Effect. Chữ ký số và WinForms UI chưa triển khai.
 
 Demo: load khóa 32 byte đã có hoặc sinh và lưu khóa nếu chưa có file. File nằm tại `keys/aes-demo.key` trong thư mục output của ứng dụng (mặc định: `information-security-toolkit/bin/Debug/net10.0/keys/aes-demo.key`) và đã được `.gitignore` bỏ qua. File khóa lỗi được báo ra Console, không tự ghi đè.
 
@@ -52,6 +52,12 @@ Lệnh `rsa crypto` tạo cặp PEM thử nghiệm mới rồi import lại; mã
 
 OAEP thêm ngẫu nhiên và kiểm tra cấu trúc mã hóa khi giải mã. RSA có giới hạn đầu vào theo modulus/padding và phù hợp với dữ liệu nhỏ như khóa AES; file lớn sẽ cần mã hóa đối xứng. Ví dụ 32 byte ở đây chỉ minh họa bọc khóa, chưa triển khai hybrid encryption hoàn chỉnh.
 
+`RsaBenchmark` dùng **RSA-2048, OAEP-SHA256**, dữ liệu ngẫu nhiên **32 byte** mô phỏng khóa AES-256; `rsa benchmark quick|normal|extended` chạy tương ứng **100/1.000/10.000** lần, chỉ chạy khi chọn rõ. Khóa được tạo trong bộ nhớ; encrypt dùng đối tượng chỉ chứa public parameters, decrypt dùng private key. Sau 10 cặp warm-up, hai `Stopwatch` đo riêng các vòng gọi `RsaCryptoService`; không tính sinh/import khóa, tạo dữ liệu, warm-up, compare, Console hay ghi CSV. Vòng decrypt dùng lại ciphertext cuối của vòng encrypt, rồi so sánh bản giải mã cuối với dữ liệu gốc. Không benchmark file lớn bằng RSA.
+
+Kết quả gồm total/average ms, operations/sec, tỷ lệ `decryption average / encryption average` khi thời gian hợp lệ và round-trip PASS/FAIL. Append vào `results/benchmark/rsa-benchmark.csv` với timestamp UTC và số thập phân invariant; CSV không có header tương thích sẽ bị từ chối, giữ nguyên dữ liệu cũ. File CSV được Git ignore; AES CSV được giữ nguyên.
+
+Public key là `(n, e)`, với `e` thường nhỏ (phổ biến 65537); private key biểu diễn bằng `(n, d)`, với `d` lớn hơn nhiều. Do chi phí lũy thừa modular, thao tác private thường chậm hơn, nhưng tỷ lệ được tính từ phép đo thực tế, không hard-code. CRT và thư viện mật mã của hệ điều hành cũng ảnh hưởng hiệu năng ([RFC 8017](https://www.rfc-editor.org/rfc/rfc8017), [tài liệu .NET](https://learn.microsoft.com/en-us/dotnet/standard/security/cross-platform-cryptography)). Đây là phép đo các lời gọi service gồm OAEP, cấp phát bộ nhớ và overhead vòng lặp; tải máy/JIT/GC có thể làm số liệu thay đổi.
+
 `Sha256Service` hash UTF-8 string hoặc `byte[]` bằng `System.Security.Cryptography`, trả **Hex uppercase: 64 ký tự = 32 byte = 256 bit**. Cùng input cho cùng hash; chuỗi/mảng rỗng hợp lệ, `null` bị từ chối. UTF-8 giữ nguyên Unicode, không tự chuẩn hóa văn bản; UTF-16 không hợp lệ bị từ chối thay vì thay ký tự.
 
 Lệnh `hash sha256` minh họa deterministic hashing, empty/Unicode, bốn cặp chỉ khác một ký tự và input giống nhau. **Hamming distance** là số bit khác nhau tại cùng vị trí: XOR hai hash 32 byte rồi đếm bit 1; phần trăm = `DifferentBits / 256.0 × 100`. Thay đổi nhỏ ở input thường làm nhiều bit output thay đổi; demo PASS khi hash khác, không bắt buộc đúng 50%. Input giống nhau phải có khoảng cách 0 và 0%. Kết quả in ra Console, không tạo CSV hay benchmark SHA-256 lớn. Không dùng SHA-256 trực tiếp để lưu password trong ứng dụng thực tế; giai đoạn này không triển khai password hashing.
@@ -70,6 +76,10 @@ dotnet run --project information-security-toolkit/information-security-toolkit.c
 
 # SHA-256 + Avalanche Effect
 dotnet run --project information-security-toolkit/information-security-toolkit.csproj -- hash sha256
+
+# RSA Benchmark: quick=100, normal=1000, extended=10000 lần; chỉ chạy mức được chọn
+dotnet run -c Release --project information-security-toolkit/information-security-toolkit.csproj -- rsa benchmark quick
+# Thay quick bằng normal hoặc extended khi cần
 
 # Quick benchmark (khuyên dùng Release khi thu thập số liệu)
 dotnet run -c Release --project information-security-toolkit/information-security-toolkit.csproj -- benchmark quick

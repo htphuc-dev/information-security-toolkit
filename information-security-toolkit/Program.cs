@@ -17,16 +17,24 @@ bool rsaKeysRequested = args.Length == 2
 bool rsaCryptoRequested = args.Length == 2
     && string.Equals(args[0], "rsa", StringComparison.OrdinalIgnoreCase)
     && string.Equals(args[1], "crypto", StringComparison.OrdinalIgnoreCase);
+bool rsaBenchmarkRequested = args.Length == 3
+    && string.Equals(args[0], "rsa", StringComparison.OrdinalIgnoreCase)
+    && string.Equals(args[1], "benchmark", StringComparison.OrdinalIgnoreCase)
+    && (string.Equals(args[2], "quick", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(args[2], "normal", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(args[2], "extended", StringComparison.OrdinalIgnoreCase));
 bool sha256Requested = args.Length == 2
     && string.Equals(args[0], "hash", StringComparison.OrdinalIgnoreCase)
     && string.Equals(args[1], "sha256", StringComparison.OrdinalIgnoreCase);
-if (args.Length != 0 && !benchmarkRequested && !rsaKeysRequested && !rsaCryptoRequested && !sha256Requested)
+if (args.Length != 0 && !benchmarkRequested && !rsaKeysRequested && !rsaCryptoRequested
+    && !rsaBenchmarkRequested && !sha256Requested)
 {
-    Console.Error.WriteLine("Usage: dotnet run --project information-security-toolkit/information-security-toolkit.csproj -- [benchmark quick|full | rsa keys|crypto | hash sha256]");
+    Console.Error.WriteLine("Usage: dotnet run --project information-security-toolkit/information-security-toolkit.csproj -- [benchmark quick|full | rsa keys|crypto | rsa benchmark quick|normal|extended | hash sha256]");
     return 1;
 }
 
 Console.WriteLine(sha256Requested ? "SHA-256 DEMO"
+    : rsaBenchmarkRequested ? "RSA PERFORMANCE BENCHMARK"
     : rsaCryptoRequested ? "RSA ENCRYPT / DECRYPT DEMO"
     : rsaKeysRequested ? "RSA KEY MANAGEMENT DEMO"
     : benchmarkRequested ? "AES FILE BENCHMARK" : "AES File Encryption Demo");
@@ -39,6 +47,12 @@ try
     }
 
     string repositoryRoot = FindRepositoryRoot();
+    if (rsaBenchmarkRequested)
+    {
+        RsaBenchmarkResult result = RsaBenchmark.Run(repositoryRoot, args[2]);
+        return result.Passed ? 0 : 1;
+    }
+
     if (rsaCryptoRequested)
     {
         return RunRsaCryptoDemo(repositoryRoot);
@@ -168,6 +182,7 @@ catch (Exception ex) when (ex is ArgumentException or FormatException or Cryptog
     or IOException or UnauthorizedAccessException or NotSupportedException or InvalidOperationException)
 {
     string operation = sha256Requested ? "SHA-256 avalanche demo"
+        : rsaBenchmarkRequested ? "RSA benchmark"
         : rsaCryptoRequested ? "RSA encryption demo"
         : rsaKeysRequested ? "RSA key management" : benchmarkRequested ? "AES benchmark" : "AES file demo";
     Console.Error.WriteLine($"{operation}: FAIL — {ex.Message}");
