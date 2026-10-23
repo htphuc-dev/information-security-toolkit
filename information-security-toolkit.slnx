@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="information-security-toolkit/information-security-toolkit.csproj" />
+  <Project Path="information-security-toolkit.WinForms/information-security-toolkit.WinForms.csproj" />
 </Solution>

@@ -1,0 +1,15 @@
+[
+  {
+    "Name": "WinForms",
+    "Projects": [
+      {
+        "Path": "information-security-toolkit.WinForms\\information-security-toolkit.WinForms.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "information-security-toolkit\\information-security-toolkit.csproj",
+        "Action": "None"
+      }
+    ]
+  }
+]

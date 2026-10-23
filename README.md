@@ -16,7 +16,7 @@ Các module dự kiến:
 
 `Common` dành cho tiện ích dùng chung; `docs/screenshots` lưu ảnh minh họa; `test-data` lưu dữ liệu thử; `results` lưu kết quả.
 
-Trạng thái hiện tại: **Đã hoàn thành giai đoạn 1–7**, gồm AES, quản lý khóa RSA/PEM, RSA encrypt/decrypt dữ liệu nhỏ, RSA benchmark, SHA-256 + Avalanche Effect và chữ ký số RSA-PSS. WinForms UI chưa triển khai.
+Trạng thái hiện tại: **Giai đoạn 8 — WinForms UI**, bổ sung giao diện cho các service AES, RSA, SHA-256, chữ ký RSA-PSS và benchmark đã hoàn thành ở giai đoạn 1–7. Console project và các lệnh demo vẫn được giữ nguyên.
 
 Demo: load khóa 32 byte đã có hoặc sinh và lưu khóa nếu chưa có file. File nằm tại `keys/aes-demo.key` trong thư mục output của ứng dụng (mặc định: `information-security-toolkit/bin/Debug/net10.0/keys/aes-demo.key`) và đã được `.gitignore` bỏ qua. File khóa lỗi được báo ra Console, không tự ghi đè.
 
@@ -93,4 +93,43 @@ dotnet run -c Release --project information-security-toolkit/information-securit
 
 # Full benchmark: tự chạy khi cần, có thể dùng nhiều GB dung lượng
 dotnet run -c Release --project information-security-toolkit/information-security-toolkit.csproj -- benchmark full
+```
+
+## How to run WinForms application
+
+Trên Windows có .NET 10 SDK:
+
+```powershell
+dotnet run --project information-security-toolkit.WinForms
+```
+
+Project `information-security-toolkit.WinForms` target `net10.0-windows`, tham chiếu project Console `information-security-toolkit` (`net10.0`). MainForm mở các form **AES**, **RSA**, **SHA-256**, **Digital Signature**, **Benchmark**. UI dùng control WinForms chuẩn và layout panel; không có thư viện UI/NuGet ngoài. Các form gọi service cũ; chỉ bổ sung `Common/FileComparison` để so sánh file bằng stream. Layout được viết bằng C# trong từng form, không dùng Designer-generated files.
+
+AES có ba tab Key/Text/File; tạo hoặc load khóa trước khi dùng. Tab File chọn nguồn trong `test-data/`, encrypted/decrypted output trong `results/`; output phải là tên file mới. RSA có hai tab Key/PEM/Parameters và Encrypt/Decrypt (OAEP-SHA256, tối đa 190 byte UTF-8 với RSA-2048). Import public PEM sẽ bỏ private key đang giữ để tránh trộn hai cặp khóa; import private PEM đồng thời lấy public parameters tương ứng.
+
+Form Signature giữ cặp RSA-2048 riêng: Generate → Sign → Verify → Sign Again. Sign Again yêu cầu dữ liệu và khóa không đổi; cả hai chữ ký được verify. Sửa Data rồi Verify để quan sát FAIL. SHA-256 hiển thị hai hash, Hamming distance và phần trăm khác nhau.
+
+Benchmark mặc định AES Quick; chỉ chạy khi bấm Run Benchmark. AES có Quick/Full, RSA có Quick/Normal/Extended và dùng lại CSV hiện có trong `results/benchmark/`. File I/O, sinh RSA key và benchmark chạy nền; các nút bị khóa trong lúc chạy, đóng form được giữ lại cho tới khi tác vụ kết thúc. Full/Extended chỉ chạy khi chủ động chọn. Khóa chỉ giữ trong bộ nhớ mỗi form và được giải phóng khi đóng; chỉ Save/Export khi người dùng chọn. Private PEM hiển thị chỉ phục vụ bài tập, không tự lưu ra file.
+
+Mở `information-security-toolkit.slnx` bằng Visual Studio 2026 có workload **.NET desktop development** để làm việc với .NET 10. Profile dùng chung `information-security-toolkit.slnLaunch` có tên **WinForms**: WinForms `Start`, Console `None`, toàn bộ đường dẫn tương đối. Chọn profile **WinForms** trên thanh công cụ trước khi F5/Ctrl+F5; Visual Studio quản lý việc ghi nhớ lựa chọn tại máy người dùng. Nếu chưa thấy profile, kiểm tra **Enable Multi-Project Launch Profiles** trong Options/Preview Features và **Configure Startup Projects** của solution. File dùng chung định nghĩa các project được chạy, không ghi đè lựa chọn startup/profile đã lưu cục bộ; không sửa `.suo` bằng code. Tham khảo [launch profile của Visual Studio](https://learn.microsoft.com/en-us/visualstudio/ide/how-to-set-multiple-startup-projects?view=visualstudio) và [phiên bản .NET/Visual Studio được hỗ trợ](https://learn.microsoft.com/en-us/dotnet/core/porting/versioning-sdk-msbuild-vs).
+
+Kiểm tra từ root repository:
+
+```powershell
+dotnet clean information-security-toolkit.slnx
+dotnet restore information-security-toolkit.slnx
+dotnet build information-security-toolkit.slnx
+dotnet run --project information-security-toolkit.WinForms/information-security-toolkit.WinForms.csproj
+# Console vẫn chạy độc lập, ví dụ:
+dotnet run --project information-security-toolkit/information-security-toolkit.csproj -- hash sha256
+```
+
+Nếu runtime báo **An Application Control policy has blocked this file / 0x800711C7**, dừng ở lỗi đó và ghi lại chính xác tên/đường dẫn DLL hoặc EXE bị chặn. Đây là lỗi chính sách bảo mật Windows, tách biệt với build, project reference và startup profile. Không sửa thuật toán, không thêm script unblock hay thay đổi chính sách bảo mật. Mở **Event Viewer → Applications and Services Logs → Microsoft → Windows → CodeIntegrity → Operational**, lọc thời điểm vừa chạy và Event ID **3077** (chặn thực thi), **3089** (thông tin chữ ký). Xem **File Name**, **Process Name**, policy và **ActivityID** để đối chiếu các sự kiện liên quan. Có thể đọc log bằng lệnh dưới đây; đây là thao tác chỉ đọc ([hướng dẫn Microsoft](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/app-control-for-business/operations/appcontrol-debugging-and-troubleshooting)):
+
+```powershell
+Get-WinEvent -FilterHashtable @{
+    LogName = 'Microsoft-Windows-CodeIntegrity/Operational'
+    Id = 3077, 3089
+    StartTime = (Get-Date).AddMinutes(-15)
+} | Select-Object TimeCreated, Id, Message | Format-List
 ```
