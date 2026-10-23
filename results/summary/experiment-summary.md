@@ -131,9 +131,3 @@ Các lệnh trên tạo lần đo mới và append CSV benchmark; số liệu c�
 - Không có mức benchmark bị bỏ qua: AES đủ 1/10/100/500 MB và 1 GB; RSA đủ 100/1.000/10.000 iterations. Không có kết quả FAIL trong đợt này.
 - Thư mục `tests/information-security-toolkit.Tests` không có trong workspace tại thời điểm thực nghiệm. Solution hiện chỉ có Console, WinForms và solution folder `/tests/` rỗng. Vì vậy đợt này không chạy lại hoặc xác nhận lại kết quả 50 test của giai đoạn 9; cần khôi phục project test nếu muốn kiểm tra regression.
 - Không sửa source crypto, WinForms hoặc solution trong giai đoạn 10. Không git add, commit hoặc push.
-
-## Ghi chú khi chuẩn bị release — Giai đoạn 11
-
-Ngày 23/10/2026, đã dọn các nguồn benchmark và output nhị phân cũ còn lại, cùng khóa demo và artifact build tạm; tổng cleanup khoảng 8,17 GB. Việc giữ nguồn và 9 thư mục output cũ được mô tả ở trên là trạng thái tại cuối giai đoạn 10, trước lần cleanup này. CSV, hash, thời gian, PASS/FAIL và các bảng số liệu được giữ nguyên; transcript local của đợt `20261023T153951Z` vẫn còn để đối chiếu/chụp ảnh. Các tệp benchmark nguồn sẽ được module tạo lại khi chạy lần sau.
-
-Release solution build và các demo Console ngắn PASS; MainForm và 5 form con đã mở/đóng thành công. Không benchmark 1 GB lại để chuẩn bị release. Xem [release checklist](../../docs/release-checklist.md) cho screenshot còn thiếu, phạm vi smoke và giới hạn publish hiện tại.

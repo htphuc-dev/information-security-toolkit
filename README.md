@@ -155,45 +155,6 @@ SHA-256 có 4 cặp thay một ký tự, khác **122–136/256 bit**; cặp gi�
 - [RSA-PSS transcript](results/experiments/signature-results.txt).
 - [Báo cáo thực nghiệm và điều kiện đo](results/summary/experiment-summary.md).
 
-## 8. Screenshot minh chứng
-
-Hiện chưa có ảnh; cần chụp thủ công các tệp sau. Chỉ nhúng ảnh vào README sau khi ảnh thực tế được bổ sung.
-
-| Tệp dự kiến | Nội dung |
-|---|---|
-| `docs/screenshots/main-form.png` | MainForm tiếng Việt |
-| `docs/screenshots/aes.png` | AES round-trip, so sánh KHỚP |
-| `docs/screenshots/rsa.png` | RSA-OAEP round-trip |
-| `docs/screenshots/sha256.png` | Hai hash, Hamming distance và tỷ lệ |
-| `docs/screenshots/signature.png` | Hai chữ ký RSA-PSS khác nhau, xác minh hợp lệ |
-| `docs/screenshots/benchmark.png` | Số liệu AES 1 GB đã ghi |
-
-Xem [hướng dẫn chụp screenshot](docs/screenshots/README.md), gồm cách hiển thị transcript cũ để không phải benchmark 1 GB lại.
-
-## 9. Kiểm tra trước khi nộp
-
-[Release checklist](docs/release-checklist.md) ghi các bước đã kiểm tra và việc còn làm thủ công. Smoke test xác nhận mở form và các demo ngắn; cần xem lại bố cục, hộp chọn tệp và kịch bản demo trước khi trình bày.
-
-Bộ test xUnit giai đoạn 9 cần được khôi phục để chạy lại automated tests. Snapshot hiện chỉ có hai project ứng dụng; chạy `dotnet test` khi thiếu test project không chứng minh 50 test PASS.
-
-## 10. Dữ liệu local và Git
-
-Commit source, tài liệu, screenshot thật, CSV nhỏ và Markdown summary. `.gitignore` loại trừ `.vs/`, `bin/`, `obj/`, TestResults/coverage, khóa, PEM, dữ liệu benchmark lớn, output tạm và `artifacts/`. CSV và summary thực nghiệm được phép commit; dữ liệu nhị phân có thể tạo lại.
-
-Không có bước tự commit/push/tag hoặc tạo GitHub Release.
-
-## 11. Publish WinForms (tùy chọn)
-
-Lệnh Windows x64, kèm .NET runtime:
-
-```powershell
-dotnet publish information-security-toolkit.WinForms/information-security-toolkit.WinForms.csproj -c Release -r win-x64 --self-contained true -o artifacts/publish/win-x64
-```
-
-Chưa publish thử hoặc tạo installer. Output được Git ignore. Giữ thư mục publish trong repository: `AppPaths` hiện tìm `.slnx` ở các thư mục cha để xác định `test-data/`, `results/` và `keys/`; copy riêng thư mục publish ra ngoài repo chưa phải cách triển khai được hỗ trợ.
-
-Gợi ý release: **v1.0.0**, tiêu đề **Information Security Toolkit v1.0.0**; nội dung AES, RSA, SHA-256, RSA-PSS, WinForms và Benchmark. Xem checklist trước khi quyết định release.
-
-## 12. Lỗi Windows App Control
+## 8. Lỗi Windows App Control
 
 Nếu gặp `An Application Control policy has blocked this file` / `0x800711C7`, ghi đúng tệp và đường dẫn bị chặn, dừng lần chạy đó và kiểm tra **Event Viewer → Microsoft → Windows → CodeIntegrity → Operational**, Event ID 3077/3089. Đây là lỗi chính sách Windows, khác lỗi compile/project; không đổi thuật toán hoặc thêm script bypass/unblock.
