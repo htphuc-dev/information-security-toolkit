@@ -3,6 +3,7 @@
 ## 1. Giới thiệu
 
 Project môn **An toàn và bảo mật thông tin**, thực hành AES, RSA, SHA-256, chữ ký số RSA-PSS và đo hiệu năng. Console phục vụ demo/thực nghiệm; WinForms cung cấp giao diện tiếng Việt dùng lại các service hiện có.
+
 ---
 <img width="722" height="512" alt="Screenshot 2026-10-23 235836" src="https://github.com/user-attachments/assets/5a926925-69dd-468b-ac63-ce397c00e3af" />
 
