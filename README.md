@@ -1,135 +1,199 @@
 # Information Security Toolkit
 
-Project `information-security-toolkit` phục vụ bài tập môn An toàn và bảo mật thông tin.
+## 1. Giới thiệu
 
-Mục tiêu: thực hành sinh và quản lý khóa, mã hóa/giải mã văn bản và file, băm dữ liệu, ký/xác minh chữ ký và đo hiệu năng.
+Project môn **An toàn và bảo mật thông tin**, thực hành AES, RSA, SHA-256, chữ ký số RSA-PSS và đo hiệu năng. Console phục vụ demo/thực nghiệm; WinForms cung cấp giao diện tiếng Việt dùng lại các service hiện có.
 
-Công nghệ: C#, .NET 10 LTS, Console App; phát triển trên Windows 11 với VS Code. Solution dùng định dạng `.slnx`, có thể mở bằng Visual Studio hỗ trợ .NET 10.
+## 2. Công nghệ sử dụng
 
-Các module dự kiến:
+- C#, .NET 10; Console target `net10.0`, WinForms target `net10.0-windows`.
+- Windows Forms, font Segoe UI; `System.Security.Cryptography`.
+- Git/GitHub; solution `.slnx`; phát triển trên Windows 11.
 
-- **AES**: sinh, lưu/import khóa; mã hóa/giải mã văn bản và file.
-- **RSA**: sinh cặp khóa, export/import PEM, đọc tham số và mã hóa/giải mã dữ liệu nhỏ.
-- **SHA-256** (`Hashing`): băm dữ liệu và quan sát avalanche effect.
-- **Digital Signature** (`Signature`): ký/xác minh RSA-PSS với SHA-256.
-- **Benchmark**: đo hiệu năng và so sánh file nguồn với file sau giải mã.
+Project test xUnit giai đoạn 9 hiện không có trong workspace. Kết quả 50/50 PASS là báo cáo lịch sử, chưa được chạy lại trong đợt chuẩn bị release này.
 
-`Common` dành cho tiện ích dùng chung; `docs/screenshots` lưu ảnh minh họa; `test-data` lưu dữ liệu thử; `results` lưu kết quả.
+## 3. Chức năng chính
 
-Trạng thái hiện tại: **Giai đoạn 8 — WinForms UI**, bổ sung giao diện cho các service AES, RSA, SHA-256, chữ ký RSA-PSS và benchmark đã hoàn thành ở giai đoạn 1–7. Console project và các lệnh demo vẫn được giữ nguyên.
+### AES
 
-Demo: load khóa 32 byte đã có hoặc sinh và lưu khóa nếu chưa có file. File nằm tại `keys/aes-demo.key` trong thư mục output của ứng dụng (mặc định: `information-security-toolkit/bin/Debug/net10.0/keys/aes-demo.key`) và đã được `.gitignore` bỏ qua. File khóa lỗi được báo ra Console, không tự ghi đè.
+- Sinh khóa AES-256 ngẫu nhiên 32 byte; lưu/nạp Base64 và kiểm tra độ dài.
+- Văn bản UTF-8/Unicode: AES-GCM, nonce ngẫu nhiên 12 byte, tag 16 byte; output `Base64(nonce | tag | ciphertext)`.
+- Tệp: AES-256-CBC/PKCS7 + HMAC-SHA256, Encrypt-then-MAC. HKDF-SHA256 tách khóa AES/HMAC; salt và IV ngẫu nhiên.
+- Xử lý streaming, buffer 64 KiB; xác minh HMAC trước khi giải mã. File v1: `ISTF | version | salt | IV | HMAC | ciphertext`.
+- Backend mặc định `overwrite=false`. WinForms hỏi Yes/No khi tệp đích tồn tại; chỉ thay tệp cũ sau khi xử lý thành công. No hủy bình thường.
+- Benchmark tệp tới 1 GB; so sánh kích thước và SHA-256 nguồn/giải mã.
 
-Demo đọc tất cả file trực tiếp trong `test-data/` ở root repository, bỏ qua `README.md` và `.gitkeep`. Các file mẫu `sample.txt`, `sample-unicode.txt`, `sample-empty.bin`, `sample-binary.bin` được tạo nếu chưa có; file đã có được giữ nguyên. Bạn có thể thêm file riêng vào `test-data/` để kiểm thử. Demo mã hóa/giải mã và so sánh từng byte bằng stream, đồng thời kiểm tra sai khóa, sửa dữ liệu, input thiếu, output không hợp lệ và format sai.
+### RSA
 
-Mỗi lần chạy tạo `results/run-<id>/`, chứa `<tên-file>.enc` và `<tên-file>.decrypted`; thư mục con `checks/` chứa dữ liệu kiểm tra lỗi. Chương trình tự tìm root repository nên chạy được từ root hoặc thư mục project. Dữ liệu trong `test-data/` và `results/` đã được Git bỏ qua, ngoại trừ các README.
+- Sinh cặp khóa mặc định 2048 bit, hỗ trợ 3072/4096 bit.
+- Export/import public PEM dạng SPKI, private PEM dạng PKCS#8; xem `n, e, d, p, q, dp, dq, inverseQ`.
+- Public-key encrypt/private-key decrypt với OAEP-SHA256. RSA-2048 nhận tối đa **190 byte**, tạo ciphertext 256 byte.
+- Demo dữ liệu nhỏ, lưu/nạp ciphertext Base64; benchmark public/private operations với đầu vào 32 byte.
 
-`AesTextService.Encrypt` chuyển văn bản sang UTF-8, dùng nonce ngẫu nhiên 12 byte và authentication tag 16 byte. Định dạng trả về là `Base64(nonce | tag | ciphertext)`: byte 0–11 là nonce, byte 12–27 là tag, các byte từ 28 trở đi là ciphertext. Khóa không nằm trong output. Nonce mới được sinh cho mỗi lần mã hóa nên cùng plaintext và khóa vẫn cho output khác nhau.
+### SHA-256
 
-`AesTextService.Decrypt` xác thực tag rồi trả lại văn bản UTF-8; hỗ trợ plaintext rỗng, từ chối đầu vào lỗi, sai khóa và dữ liệu bị sửa. Module văn bản giữ nguyên AES-GCM.
+- Hash chuỗi UTF-8 hoặc `byte[]`, hỗ trợ rỗng và Unicode; trả Hex uppercase 64 ký tự = 32 byte = 256 bit.
+- Hamming distance và tỷ lệ bit khác biệt minh họa avalanche effect.
 
-`AesFileService` dùng **AES-256-CBC/PKCS7 + HMAC-SHA256 (Encrypt-then-MAC)**, với `FileStream`, `CryptoStream` và buffer 64 KB. Hai khóa riêng cho AES và HMAC được dẫn xuất bằng HKDF-SHA256 với hai nhãn khác nhau từ khóa 32 byte và salt ngẫu nhiên; IV 16 byte cũng được sinh mới cho mỗi file. CBC phù hợp với streaming trong API .NET mà không cần giữ toàn bộ file để gọi `AesGcm` một lần.
+### Digital Signature
 
-File nhị phân v1: `ISTF(4) | version=1(1) | salt(16) | IV(16) | HMAC(32) | ciphertext(N×16)`. HMAC bao phủ toàn bộ header (magic, version, salt, IV) và ciphertext, không bao gồm trường HMAC. Mã hóa ghi ciphertext rồi đọc lại theo chunk để tính HMAC; giải mã xác minh toàn bộ MAC bằng `FixedTimeEquals` trước khi decrypt trong lượt đọc thứ hai. Một handle input được giữ mở với `FileShare.Read` để ngăn ghi/xóa file trong lúc xác minh và giải mã trên Windows.
+- SHA-256 + RSA-PSS; ký bằng private key, xác minh bằng public key.
+- Phát hiện dữ liệu/chữ ký bị sửa hoặc sai public key.
+- Cùng dữ liệu và private key có thể tạo chữ ký khác nhau; cả hai vẫn xác minh hợp lệ.
 
-Output luôn là file mới: ghi vào file `.tmp` cùng thư mục, chỉ chuyển sang tên đích sau khi thành công; lỗi sẽ dọn file tạm và không ghi đè file hiện có. Bộ nhớ dùng cho buffer không tăng theo kích thước file; đánh đổi là hai lượt I/O. Lỗi được báo bằng exception chuẩn .NET và chương trình in `FAIL`, thoát với mã 1 khi không hoàn thành.
+### WinForms
 
-Benchmark chỉ chạy khi truyền `benchmark quick` (1/10 MB) hoặc `benchmark full` (100/500 MB, 1 GB). Quy ước: 1 MB = 1.000.000 byte, 1 GB = 1.000 MB. Không có tham số vẫn chạy demo file nhỏ. Dữ liệu được sinh theo chunk 1 MiB (lặp lại một block ngẫu nhiên), lưu trong `test-data/benchmark/`; file đúng kích thước được tái sử dụng, file sai kích thước được báo lỗi và giữ nguyên.
+MainForm mở AES, RSA, SHA-256, Chữ ký số và Đánh giá hiệu năng. Giao diện tiếng Việt dùng control chuẩn; I/O và benchmark chạy nền. Benchmark chỉ bắt đầu khi người dùng chọn chạy.
 
-Sau warm-up 64 KiB, mỗi file được đo một lần bằng hai `Stopwatch` riêng cho encrypt/decrypt; không tính tạo file, SHA-256 hoặc ghi CSV vào thời gian đo. Throughput MB/s = kích thước nguồn MB / thời gian giây. Đo toàn bộ thao tác AES-CBC + HMAC và I/O; cache của hệ điều hành có thể ảnh hưởng số liệu. Kích thước và SHA-256 streaming của nguồn/giải mã phải trùng nhau; hashing trong benchmark chỉ phục vụ xác minh file.
+## 4. Kiến trúc project
 
-Output nằm trong `results/benchmark/run-<RunId>/`; CSV `results/benchmark/aes-benchmark.csv` append thời gian UTC, tên/kích thước file, thời gian ms, throughput, hai SHA-256, integrity/PASS/FAIL, mode và RunId. CSV dùng dấu chấm thập phân để đọc nhất quán. Giữ nguyên kết quả cũ; benchmark kiểm tra dung lượng trống trước khi chạy. Full lần đầu có thể dùng hơn 4,8 GB cho nguồn + mã hóa + giải mã; chỉ chạy khi chọn rõ `full`. Dữ liệu/CSV benchmark đều được Git ignore. Full mode để chạy thủ công sau.
-
-File khóa là văn bản Base64, **không được mã hóa**. Chỉ dùng khóa demo cho bài tập và giữ bí mật file khóa.
-
-`RsaKeyManager` sinh cặp khóa RSA mặc định 2048 bit, hỗ trợ 3072/4096 bit. Public key export/import theo SPKI (`PUBLIC KEY`), private key theo PKCS#8 không mã hóa (`PRIVATE KEY`). Loader yêu cầu đúng loại, đúng một PEM block, không chấp nhận dữ liệu thừa hay nội dung ASN.1 không hợp lệ. Khóa import cũng phải có một trong các kích thước được hỗ trợ; export không ghi đè file đã có. Các đối tượng `RSA` trả về cần được giải phóng bằng `using`.
-
-`PemAnalyzer` lấy `RSAParameters` và in Base64/số byte: public `(n, e)`, private `(n, e, d, p, q, dp, dq, inverseQ)`; exponent còn được hiển thị dạng số. Lệnh `rsa keys` sinh/export/import lại khóa, so sánh modulus/exponent và kiểm tra các đầu vào lỗi. PEM local nằm trong `keys/rsa/run-<id>/`, đã được Git ignore. Demo in cả tham số private ra Console và lưu private PEM không mã hóa; chỉ dùng khóa thử nghiệm và giữ bí mật các giá trị này.
-
-`RsaCryptoService` mã hóa bằng thao tác public RSA và giải mã bằng private RSA với **OAEP-SHA256**. `GetMaxPlaintextSize` tính `k - 2×SHA256.HashSizeInBytes - 2`: RSA-2048 có `k = 256`, nhận tối đa **190 byte**, ciphertext **256 byte**. API hỗ trợ các khóa 2048/3072/4096 bit của `RsaKeyManager`; từ chối plaintext null/rỗng/vượt giới hạn và ciphertext sai độ dài. Sai khóa, public-only key khi decrypt hoặc ciphertext bị sửa đều báo lỗi rõ ràng.
-
-Lệnh `rsa crypto` tạo cặp PEM thử nghiệm mới rồi import lại; mã hóa 32 byte ngẫu nhiên giả lập AES-256 key, lưu Base64 thuần trong `results/rsa/run-<id>/rsa-encrypted.txt`, đọc lại, giải mã và so sánh. PEM tương ứng ở `keys/rsa/run-<id>/`. Demo kiểm tra 1/32/100/max byte, text nhỏ, sai khóa, sửa ciphertext và vượt giới hạn; giữ nguyên các kết quả cũ. Không dùng khóa AES thật từ các demo trước.
-
-OAEP thêm ngẫu nhiên và kiểm tra cấu trúc mã hóa khi giải mã. RSA có giới hạn đầu vào theo modulus/padding và phù hợp với dữ liệu nhỏ như khóa AES; file lớn sẽ cần mã hóa đối xứng. Ví dụ 32 byte ở đây chỉ minh họa bọc khóa, chưa triển khai hybrid encryption hoàn chỉnh.
-
-`RsaBenchmark` dùng **RSA-2048, OAEP-SHA256**, dữ liệu ngẫu nhiên **32 byte** mô phỏng khóa AES-256; `rsa benchmark quick|normal|extended` chạy tương ứng **100/1.000/10.000** lần, chỉ chạy khi chọn rõ. Khóa được tạo trong bộ nhớ; encrypt dùng đối tượng chỉ chứa public parameters, decrypt dùng private key. Sau 10 cặp warm-up, hai `Stopwatch` đo riêng các vòng gọi `RsaCryptoService`; không tính sinh/import khóa, tạo dữ liệu, warm-up, compare, Console hay ghi CSV. Vòng decrypt dùng lại ciphertext cuối của vòng encrypt, rồi so sánh bản giải mã cuối với dữ liệu gốc. Không benchmark file lớn bằng RSA.
-
-Kết quả gồm total/average ms, operations/sec, tỷ lệ `decryption average / encryption average` khi thời gian hợp lệ và round-trip PASS/FAIL. Append vào `results/benchmark/rsa-benchmark.csv` với timestamp UTC và số thập phân invariant; CSV không có header tương thích sẽ bị từ chối, giữ nguyên dữ liệu cũ. File CSV được Git ignore; AES CSV được giữ nguyên.
-
-Public key là `(n, e)`, với `e` thường nhỏ (phổ biến 65537); private key biểu diễn bằng `(n, d)`, với `d` lớn hơn nhiều. Do chi phí lũy thừa modular, thao tác private thường chậm hơn, nhưng tỷ lệ được tính từ phép đo thực tế, không hard-code. CRT và thư viện mật mã của hệ điều hành cũng ảnh hưởng hiệu năng ([RFC 8017](https://www.rfc-editor.org/rfc/rfc8017), [tài liệu .NET](https://learn.microsoft.com/en-us/dotnet/standard/security/cross-platform-cryptography)). Đây là phép đo các lời gọi service gồm OAEP, cấp phát bộ nhớ và overhead vòng lặp; tải máy/JIT/GC có thể làm số liệu thay đổi.
-
-`Sha256Service` hash UTF-8 string hoặc `byte[]` bằng `System.Security.Cryptography`, trả **Hex uppercase: 64 ký tự = 32 byte = 256 bit**. Cùng input cho cùng hash; chuỗi/mảng rỗng hợp lệ, `null` bị từ chối. UTF-8 giữ nguyên Unicode, không tự chuẩn hóa văn bản; UTF-16 không hợp lệ bị từ chối thay vì thay ký tự.
-
-Lệnh `hash sha256` minh họa deterministic hashing, empty/Unicode, bốn cặp chỉ khác một ký tự và input giống nhau. **Hamming distance** là số bit khác nhau tại cùng vị trí: XOR hai hash 32 byte rồi đếm bit 1; phần trăm = `DifferentBits / 256.0 × 100`. Thay đổi nhỏ ở input thường làm nhiều bit output thay đổi; demo PASS khi hash khác, không bắt buộc đúng 50%. Input giống nhau phải có khoảng cách 0 và 0%. Kết quả in ra Console, không tạo CSV hay benchmark SHA-256 lớn. Không dùng SHA-256 trực tiếp để lưu password trong ứng dụng thực tế; giai đoạn này không triển khai password hashing.
-
-`DigitalSignatureService.SignData(byte[], RSA)` dùng private key để tạo chữ ký **RSA-PSS + SHA-256**; `VerifyData(byte[], byte[], RSA)` xác minh bằng public key và trả `bool`. API `RSA.SignData`/`VerifyData` của .NET tự hash dữ liệu bằng SHA-256, không cần hash trước rồi truyền vào `SignData`. Dữ liệu rỗng hợp lệ, `null` bị từ chối; ký bằng public-only key báo lỗi rõ ràng. Dữ liệu/chữ ký bị sửa, sai public key và chữ ký sai độ dài trả `false`; lỗi cấu hình/provider vẫn được báo bằng exception.
-
-Lệnh `signature demo` tạo khóa **RSA-2048** trong bộ nhớ, tách public parameters để verify, ký dữ liệu gốc, dữ liệu rỗng và Unicode UTF-8. Chữ ký được in dạng Base64 ra Console; không lưu khóa hay output xuống file. Demo kiểm tra dữ liệu bị sửa, sai public key, chữ ký bị sửa và **hai lần ký cùng dữ liệu với cùng private key**: chữ ký khác nhau, cả hai vẫn verify PASS. RSA-PSS dùng **random salt** trong quá trình tạo chữ ký nên có tính ngẫu nhiên; thư viện chuẩn quản lý salt ([RFC 8017, mục 8.1](https://www.rfc-editor.org/rfc/rfc8017.html#section-8.1)). Giai đoạn này chưa triển khai certificate/PKI, ký file hay benchmark chữ ký.
-
-Build và chạy từ thư mục root:
-
-```powershell
-dotnet build information-security-toolkit.slnx
-dotnet run --project information-security-toolkit/information-security-toolkit.csproj
-
-# RSA Key Management + PEM
-dotnet run --project information-security-toolkit/information-security-toolkit.csproj -- rsa keys
-
-# RSA Encrypt / Decrypt dữ liệu nhỏ
-dotnet run --project information-security-toolkit/information-security-toolkit.csproj -- rsa crypto
-
-# SHA-256 + Avalanche Effect
-dotnet run --project information-security-toolkit/information-security-toolkit.csproj -- hash sha256
-
-# Digital Signature — RSA-2048 / SHA-256 / RSA-PSS
-dotnet run --project information-security-toolkit/information-security-toolkit.csproj -- signature demo
-
-# RSA Benchmark: quick=100, normal=1000, extended=10000 lần; chỉ chạy mức được chọn
-dotnet run -c Release --project information-security-toolkit/information-security-toolkit.csproj -- rsa benchmark quick
-# Thay quick bằng normal hoặc extended khi cần
-
-# Quick benchmark (khuyên dùng Release khi thu thập số liệu)
-dotnet run -c Release --project information-security-toolkit/information-security-toolkit.csproj -- benchmark quick
-
-# Full benchmark: tự chạy khi cần, có thể dùng nhiều GB dung lượng
-dotnet run -c Release --project information-security-toolkit/information-security-toolkit.csproj -- benchmark full
+```text
+information-security-toolkit/
+├── information-security-toolkit/         # Logic và Console
+│   ├── AES/
+│   ├── RSA/
+│   ├── Hashing/
+│   ├── Signature/
+│   ├── Benchmark/
+│   ├── Common/
+│   └── Program.cs
+├── information-security-toolkit.WinForms/
+│   ├── Forms/
+│   ├── AppPaths.cs
+│   ├── Ui.cs
+│   └── Program.cs
+├── docs/
+│   ├── screenshots/
+│   └── release-checklist.md
+├── test-data/                            # Dữ liệu local, được ignore
+├── results/                              # CSV, summary và output local
+├── information-security-toolkit.slnx
+├── information-security-toolkit.slnLaunch
+├── README.md
+└── .gitignore
 ```
 
-## How to run WinForms application
+WinForms dùng `ProjectReference` tới project Console/logic; Console chạy độc lập. Không có project Core riêng hoặc DLL reference thủ công vào thư mục build.
 
-Trên Windows có .NET 10 SDK:
+## 5. Hướng dẫn chạy
 
-```powershell
-dotnet run --project information-security-toolkit.WinForms
-```
-
-Project `information-security-toolkit.WinForms` target `net10.0-windows`, tham chiếu project Console `information-security-toolkit` (`net10.0`). MainForm mở các form **AES**, **RSA**, **SHA-256**, **Digital Signature**, **Benchmark**. UI dùng control WinForms chuẩn và layout panel; không có thư viện UI/NuGet ngoài. Các form gọi service cũ; chỉ bổ sung `Common/FileComparison` để so sánh file bằng stream. Layout được viết bằng C# trong từng form, không dùng Designer-generated files.
-
-AES có ba tab Key/Text/File; tạo hoặc load khóa trước khi dùng. Tab File chọn nguồn trong `test-data/`, encrypted/decrypted output trong `results/`; output phải là tên file mới. RSA có hai tab Key/PEM/Parameters và Encrypt/Decrypt (OAEP-SHA256, tối đa 190 byte UTF-8 với RSA-2048). Import public PEM sẽ bỏ private key đang giữ để tránh trộn hai cặp khóa; import private PEM đồng thời lấy public parameters tương ứng.
-
-Form Signature giữ cặp RSA-2048 riêng: Generate → Sign → Verify → Sign Again. Sign Again yêu cầu dữ liệu và khóa không đổi; cả hai chữ ký được verify. Sửa Data rồi Verify để quan sát FAIL. SHA-256 hiển thị hai hash, Hamming distance và phần trăm khác nhau.
-
-Benchmark mặc định AES Quick; chỉ chạy khi bấm Run Benchmark. AES có Quick/Full, RSA có Quick/Normal/Extended và dùng lại CSV hiện có trong `results/benchmark/`. File I/O, sinh RSA key và benchmark chạy nền; các nút bị khóa trong lúc chạy, đóng form được giữ lại cho tới khi tác vụ kết thúc. Full/Extended chỉ chạy khi chủ động chọn. Khóa chỉ giữ trong bộ nhớ mỗi form và được giải phóng khi đóng; chỉ Save/Export khi người dùng chọn. Private PEM hiển thị chỉ phục vụ bài tập, không tự lưu ra file.
-
-Mở `information-security-toolkit.slnx` bằng Visual Studio 2026 có workload **.NET desktop development** để làm việc với .NET 10. Profile dùng chung `information-security-toolkit.slnLaunch` có tên **WinForms**: WinForms `Start`, Console `None`, toàn bộ đường dẫn tương đối. Chọn profile **WinForms** trên thanh công cụ trước khi F5/Ctrl+F5; Visual Studio quản lý việc ghi nhớ lựa chọn tại máy người dùng. Nếu chưa thấy profile, kiểm tra **Enable Multi-Project Launch Profiles** trong Options/Preview Features và **Configure Startup Projects** của solution. File dùng chung định nghĩa các project được chạy, không ghi đè lựa chọn startup/profile đã lưu cục bộ; không sửa `.suo` bằng code. Tham khảo [launch profile của Visual Studio](https://learn.microsoft.com/en-us/visualstudio/ide/how-to-set-multiple-startup-projects?view=visualstudio) và [phiên bản .NET/Visual Studio được hỗ trợ](https://learn.microsoft.com/en-us/dotnet/core/porting/versioning-sdk-msbuild-vs).
-
-Kiểm tra từ root repository:
+Yêu cầu: Windows và **.NET 10 SDK**. Visual Studio cần hỗ trợ .NET 10 và workload **.NET desktop development**. Chạy từ root repository:
 
 ```powershell
-dotnet clean information-security-toolkit.slnx
-dotnet restore information-security-toolkit.slnx
-dotnet build information-security-toolkit.slnx
-dotnet run --project information-security-toolkit.WinForms/information-security-toolkit.WinForms.csproj
-# Console vẫn chạy độc lập, ví dụ:
-dotnet run --project information-security-toolkit/information-security-toolkit.csproj -- hash sha256
+dotnet clean information-security-toolkit.slnx -m:1
+dotnet restore information-security-toolkit.slnx -m:1
+dotnet build information-security-toolkit.slnx -c Release -m:1
+
+# Console: demo AES file nhỏ
+dotnet run -c Release --no-build --project information-security-toolkit/information-security-toolkit.csproj
+
+# WinForms
+dotnet run -c Release --no-build --project information-security-toolkit.WinForms/information-security-toolkit.WinForms.csproj
 ```
 
-Nếu runtime báo **An Application Control policy has blocked this file / 0x800711C7**, dừng ở lỗi đó và ghi lại chính xác tên/đường dẫn DLL hoặc EXE bị chặn. Đây là lỗi chính sách bảo mật Windows, tách biệt với build, project reference và startup profile. Không sửa thuật toán, không thêm script unblock hay thay đổi chính sách bảo mật. Mở **Event Viewer → Applications and Services Logs → Microsoft → Windows → CodeIntegrity → Operational**, lọc thời điểm vừa chạy và Event ID **3077** (chặn thực thi), **3089** (thông tin chữ ký). Xem **File Name**, **Process Name**, policy và **ActivityID** để đối chiếu các sự kiện liên quan. Có thể đọc log bằng lệnh dưới đây; đây là thao tác chỉ đọc ([hướng dẫn Microsoft](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/app-control-for-business/operations/appcontrol-debugging-and-troubleshooting)):
+Trong Visual Studio, mở `information-security-toolkit.slnx`, chọn launch profile **WinForms** hoặc đặt WinForms làm Startup Project. Profile dùng đường dẫn tương đối; Visual Studio ghi nhớ lựa chọn theo máy.
+
+Các demo Console khác:
 
 ```powershell
-Get-WinEvent -FilterHashtable @{
-    LogName = 'Microsoft-Windows-CodeIntegrity/Operational'
-    Id = 3077, 3089
-    StartTime = (Get-Date).AddMinutes(-15)
-} | Select-Object TimeCreated, Id, Message | Format-List
+dotnet run -c Release --no-build --project information-security-toolkit/information-security-toolkit.csproj -- rsa keys
+dotnet run -c Release --no-build --project information-security-toolkit/information-security-toolkit.csproj -- rsa crypto
+dotnet run -c Release --no-build --project information-security-toolkit/information-security-toolkit.csproj -- hash sha256
+dotnet run -c Release --no-build --project information-security-toolkit/information-security-toolkit.csproj -- signature demo
 ```
+
+Demo AES đọc các tệp trực tiếp trong `test-data/`, bỏ qua README; tự tạo mẫu text, Unicode, rỗng, nhị phân nếu thiếu. Output nằm trong `results/run-<id>/`. Các thư mục dữ liệu được tạo khi cần.
+
+Khóa AES Base64 và private PEM **chưa được mã hóa**; chỉ dùng khóa thử nghiệm. `rsa keys` in cả private parameters ra Console. Không đưa khóa hoặc ảnh chứa khóa bí mật vào Git.
+
+## 6. Chạy benchmark
+
+```powershell
+# AES: 1 MB, 10 MB
+dotnet run -c Release --no-build --project information-security-toolkit/information-security-toolkit.csproj -- benchmark quick
+
+# AES: 100 MB, 500 MB, 1 GB
+dotnet run -c Release --no-build --project information-security-toolkit/information-security-toolkit.csproj -- benchmark full
+
+# RSA: quick=100, normal=1000, extended=10000 iterations
+dotnet run -c Release --no-build --project information-security-toolkit/information-security-toolkit.csproj -- rsa benchmark quick
+dotnet run -c Release --no-build --project information-security-toolkit/information-security-toolkit.csproj -- rsa benchmark normal
+dotnet run -c Release --no-build --project information-security-toolkit/information-security-toolkit.csproj -- rsa benchmark extended
+```
+
+Đơn vị: **1 MB = 1.000.000 byte**, 1 GB = 1.000 MB. AES Full lần đầu cần trên 4,8 GB cho nguồn và output; kiểm tra dung lượng trước khi chạy. Source/encrypted/decrypted được giữ local và ignore; CSV append, không thay kết quả cũ.
+
+Thời gian đo loại trừ tạo dữ liệu/khóa, warm-up, SHA-256 đối chiếu và ghi CSV. AES đo cả CBC, HMAC và I/O; RSA đo các vòng service OAEP. Cache, JIT, GC và tải máy có thể ảnh hưởng số liệu.
+
+## 7. Kết quả thực nghiệm
+
+Số liệu Release ngày **23/10/2026**, đợt `20261023T153951Z`; mỗi mức một lần đo. Đây là số liệu đã lưu, không phải ngưỡng tốc độ cam kết.
+
+| AES | Encrypt ms | Decrypt ms | Encrypt MB/s | Decrypt MB/s | Integrity |
+|---|---:|---:|---:|---:|---|
+| 1 MB | 7.869 | 3.935 | 127.08 | 254.11 | PASS |
+| 10 MB | 53.117 | 22.162 | 188.26 | 451.22 | PASS |
+| 100 MB | 241.614 | 164.682 | 413.88 | 607.23 | PASS |
+| 500 MB | 1406.188 | 828.297 | 355.57 | 603.65 | PASS |
+| 1 GB | 3239.574 | 1685.956 | 308.68 | 593.14 | PASS |
+
+Cả 5 tệp có kích thước và SHA-256 sau giải mã bằng nguồn.
+
+| RSA iterations | Public encrypt avg ms | Private decrypt avg ms | Private/Public ratio |
+|---|---:|---:|---:|
+| 100 | 0.018553 | 0.571488 | 30.80x |
+| 1.000 | 0.024431 | 0.621827 | 25.45x |
+| 10.000 | 0.018039 | 0.532804 | 29.54x |
+
+RSA-2048/OAEP-SHA256, dữ liệu 32 byte; round-trip đều PASS. Trong ba lần đo, private decryption chậm hơn public encryption. AES đã xử lý tệp 1 GB theo stream; RSA được dùng cho dữ liệu nhỏ như khóa AES, không mã hóa trực tiếp tệp lớn trong project này.
+
+SHA-256 có 4 cặp thay một ký tự, khác **122–136/256 bit**; cặp giống nhau khác 0 bit. RSA-PSS tạo hai chữ ký khác nhau do random salt và xác minh cả hai thành công.
+
+- [AES benchmark CSV](results/benchmark/aes-benchmark.csv).
+- [RSA benchmark CSV](results/benchmark/rsa-benchmark.csv).
+- [SHA-256 avalanche CSV](results/experiments/sha256-avalanche.csv).
+- [RSA-PSS transcript](results/experiments/signature-results.txt).
+- [Báo cáo thực nghiệm và điều kiện đo](results/summary/experiment-summary.md).
+
+## 8. Screenshot minh chứng
+
+Hiện chưa có ảnh; cần chụp thủ công các tệp sau. Chỉ nhúng ảnh vào README sau khi ảnh thực tế được bổ sung.
+
+| Tệp dự kiến | Nội dung |
+|---|---|
+| `docs/screenshots/main-form.png` | MainForm tiếng Việt |
+| `docs/screenshots/aes.png` | AES round-trip, so sánh KHỚP |
+| `docs/screenshots/rsa.png` | RSA-OAEP round-trip |
+| `docs/screenshots/sha256.png` | Hai hash, Hamming distance và tỷ lệ |
+| `docs/screenshots/signature.png` | Hai chữ ký RSA-PSS khác nhau, xác minh hợp lệ |
+| `docs/screenshots/benchmark.png` | Số liệu AES 1 GB đã ghi |
+
+Xem [hướng dẫn chụp screenshot](docs/screenshots/README.md), gồm cách hiển thị transcript cũ để không phải benchmark 1 GB lại.
+
+## 9. Kiểm tra trước khi nộp
+
+[Release checklist](docs/release-checklist.md) ghi các bước đã kiểm tra và việc còn làm thủ công. Smoke test xác nhận mở form và các demo ngắn; cần xem lại bố cục, hộp chọn tệp và kịch bản demo trước khi trình bày.
+
+Bộ test xUnit giai đoạn 9 cần được khôi phục để chạy lại automated tests. Snapshot hiện chỉ có hai project ứng dụng; chạy `dotnet test` khi thiếu test project không chứng minh 50 test PASS.
+
+## 10. Dữ liệu local và Git
+
+Commit source, tài liệu, screenshot thật, CSV nhỏ và Markdown summary. `.gitignore` loại trừ `.vs/`, `bin/`, `obj/`, TestResults/coverage, khóa, PEM, dữ liệu benchmark lớn, output tạm và `artifacts/`. CSV và summary thực nghiệm được phép commit; dữ liệu nhị phân có thể tạo lại.
+
+Không có bước tự commit/push/tag hoặc tạo GitHub Release.
+
+## 11. Publish WinForms (tùy chọn)
+
+Lệnh Windows x64, kèm .NET runtime:
+
+```powershell
+dotnet publish information-security-toolkit.WinForms/information-security-toolkit.WinForms.csproj -c Release -r win-x64 --self-contained true -o artifacts/publish/win-x64
+```
+
+Chưa publish thử hoặc tạo installer. Output được Git ignore. Giữ thư mục publish trong repository: `AppPaths` hiện tìm `.slnx` ở các thư mục cha để xác định `test-data/`, `results/` và `keys/`; copy riêng thư mục publish ra ngoài repo chưa phải cách triển khai được hỗ trợ.
+
+Gợi ý release: **v1.0.0**, tiêu đề **Information Security Toolkit v1.0.0**; nội dung AES, RSA, SHA-256, RSA-PSS, WinForms và Benchmark. Xem checklist trước khi quyết định release.
+
+## 12. Lỗi Windows App Control
+
+Nếu gặp `An Application Control policy has blocked this file` / `0x800711C7`, ghi đúng tệp và đường dẫn bị chặn, dừng lần chạy đó và kiểm tra **Event Viewer → Microsoft → Windows → CodeIntegrity → Operational**, Event ID 3077/3089. Đây là lỗi chính sách Windows, khác lỗi compile/project; không đổi thuật toán hoặc thêm script bypass/unblock.

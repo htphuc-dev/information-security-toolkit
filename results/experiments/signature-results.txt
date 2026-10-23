@@ -1,0 +1,53 @@
+﻿Experiment: 20261023T153951Z
+Recorded UTC: 2026-10-23T15:41:24.4864906Z
+Command: dotnet run -c Release --no-build --project information-security-toolkit/information-security-toolkit.csproj -- signature demo
+
+Information Security Toolkit
+DIGITAL SIGNATURE — RSA-PSS
+----------------------------------------
+RSA key size: 2048 bits
+Hash: SHA-256
+Padding: RSA-PSS
+
+Original data:
+Information Security Toolkit
+Signature created: PASS
+Signature:
+CcDSSpDoS6ujk8axFdZMFlHJZVFahbMW5BDyLwHysglCwrLQpTyXZVCx8sgwAYoqYjoQCXmfLR7Cy7JamuOjbkfEZlSlNu1/qrhaTkBBeXsXuwqoqIoZnEbyx6xE8etLV8HWSOVrQC7rKX1S4VYctMRpsTI008WUtlYQhEjqkpyOUVSU2OfUsnLw3y7uELKjM64/rwb/Kkjv0c1UfLcoNAzhwUysXMauAqIMLx22wJXvAkaBtA4PM+IJ/cAVgBXyULYWRv6WNmnmhobImHFFprzSFJE2xlSXjqsKEYZ2Ut+G/VAEjvwwqp/HJCvvLvWgtpt8h+FReIdw/3UAfcvMtA==
+Verify original: PASS
+Modified data rejected: PASS
+Wrong public key rejected: PASS
+Tampered signature rejected: PASS
+Empty data signature: PASS
+
+Unicode data: An toàn và bảo mật thông tin ✓
+Unicode signature: PASS
+
+RANDOMIZED SIGNATURE TEST
+----------------------------------------
+Same data: YES
+Same private key: YES
+
+Signature #1:
+CcDSSpDoS6ujk8axFdZMFlHJZVFahbMW5BDyLwHysglCwrLQpTyXZVCx8sgwAYoqYjoQCXmfLR7Cy7JamuOjbkfEZlSlNu1/qrhaTkBBeXsXuwqoqIoZnEbyx6xE8etLV8HWSOVrQC7rKX1S4VYctMRpsTI008WUtlYQhEjqkpyOUVSU2OfUsnLw3y7uELKjM64/rwb/Kkjv0c1UfLcoNAzhwUysXMauAqIMLx22wJXvAkaBtA4PM+IJ/cAVgBXyULYWRv6WNmnmhobImHFFprzSFJE2xlSXjqsKEYZ2Ut+G/VAEjvwwqp/HJCvvLvWgtpt8h+FReIdw/3UAfcvMtA==
+
+Signature #2:
+TMYFSM7zc+/nsLx9eXj2X/ZT/krJpBMJI8M5AZINudN2VBONnKyCG5KxrUXMnYHE7Rhbj70s9OjuQAIF+j+vctK3RuVNcLUXZVhFGW1fZbP6GCEgrN9ArPMOlJ/A68SmQSqDpHztGPE4gGFfW4m0eh+RvLvi/oMdm+JIAyZz7xZA44Q+itK3si47HJAPTqxEaTHq4BUcfa86dfUMfF4lxd5Kx0tLhCVPIZrQ7svfz1tKzu9FiE8PlMTRr02jAa+OCreqHwompW3zzQsVCpajAc1POeDhsv1r2EMY3QCZayp+Xjp4fymZWAtFqflU9Kikr0VYVBUdAH4aOFKpXSUYtA==
+Signatures different: PASS
+Signature #1 verify: PASS
+Signature #2 verify: PASS
+RSA-PSS randomized signature test: PASS
+RSA-PSS uses a random salt: the same data and private key can produce different signatures.
+Both valid signatures can be verified using the corresponding public key.
+
+Input validation checks
+Public-only key cannot sign: PASS — RSA-PSS signing failed: a private key supporting SHA-256 and PSS is required.
+Empty signature rejected: PASS
+Truncated signature rejected: PASS
+Null signing data rejected: PASS — Value cannot be null. (Parameter 'data')
+Null private key rejected: PASS — Value cannot be null. (Parameter 'privateKey')
+Null verification data rejected: PASS — Value cannot be null. (Parameter 'data')
+Null signature rejected: PASS — Value cannot be null. (Parameter 'signature')
+Null public key rejected: PASS — Value cannot be null. (Parameter 'publicKey')
+
+Digital signature demo: PASS

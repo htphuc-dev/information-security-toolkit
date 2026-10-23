@@ -3,6 +3,9 @@
 **/[Oo]bj/
 artifacts/
 TestResults/
+coverage/
+*.trx
+*.log
 *.nupkg
 *.snupkg
 
@@ -43,6 +46,19 @@ AES-key*
 !/test-data/README.md
 /results/*
 !/results/README.md
+
+# Keep only the small, curated experimental results; binary outputs stay ignored.
+!/results/benchmark/
+/results/benchmark/*
+!/results/benchmark/aes-benchmark.csv
+!/results/benchmark/rsa-benchmark.csv
+!/results/experiments/
+/results/experiments/*
+!/results/experiments/sha256-avalanche.csv
+!/results/experiments/signature-results.txt
+!/results/summary/
+/results/summary/*
+!/results/summary/experiment-summary.md
 
 # Temporary encryption/decryption output
 *.enc

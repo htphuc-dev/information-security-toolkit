@@ -41,7 +41,7 @@ public sealed class AesForm : ToolkitForm
                 ActionButton("Chọn tệp giải mã", () => ChooseOutput(decryptedPath, "Tất cả tệp|*.*", "decrypted.txt")))), 0),
             (Ui.Buttons(ActionButton("Mã hóa tệp", EncryptFileAsync), ActionButton("Giải mã tệp", DecryptFileAsync)), 0),
             (fileResult, 0),
-            (Ui.Label("Hãy chọn tên tệp đầu ra mới; tệp đã có được giữ nguyên. Tệp được xử lý và so sánh theo luồng."), 100))));
+            (Ui.Label("Ứng dụng sẽ hỏi xác nhận trước khi ghi đè tệp đầu ra đã tồn tại. Tệp được xử lý và so sánh theo luồng."), 100))));
         Body.Controls.Add(tabs);
         plaintext.TextChanged += (_, _) => { decryptedText.Clear(); Status("Văn bản gốc đã thay đổi — hãy mã hóa để cập nhật dữ liệu."); };
         foreach (TextBox path in new[] { inputPath, encryptedPath, decryptedPath })
@@ -165,7 +165,22 @@ public sealed class AesForm : ToolkitForm
         if (dialog.ShowDialog(this) != DialogResult.OK) { Status("Đã hủy chọn đường dẫn."); return; }
         field.Text = dialog.FileName;
         fileResult.Text = "So sánh tệp: chưa thực hiện";
-        Status("Đã chọn đường dẫn. Các tệp đầu ra đã tồn tại sẽ được giữ nguyên.");
+        Status("Đã chọn đường dẫn. Ứng dụng sẽ hỏi xác nhận nếu tệp đầu ra đã tồn tại khi thực hiện thao tác.");
+    }
+
+    private bool ConfirmFileOverwrite(string outputPath, out bool overwrite)
+    {
+        overwrite = File.Exists(outputPath);
+        if (!overwrite) return true;
+
+        DialogResult result = MessageBox.Show(this,
+            "Tệp đầu ra đã tồn tại.\nBạn có muốn ghi đè tệp này không?",
+            "Xác nhận ghi đè tệp", MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
+            MessageBoxDefaultButton.Button2);
+        if (result == DialogResult.Yes) return true;
+
+        Status("Đã hủy thao tác; tệp đầu ra hiện có được giữ nguyên.");
+        return false;
     }
 
     private async Task EncryptFileAsync()
@@ -173,8 +188,11 @@ public sealed class AesForm : ToolkitForm
         byte[] key = RequireKey();
         string input = inputPath.Text;
         string output = encryptedPath.Text;
+        OperationStage = "Mã hóa tệp AES";
+        OperationFilePath = output;
+        if (!ConfirmFileOverwrite(output, out bool overwrite)) return;
         fileResult.Text = "So sánh tệp: chưa thực hiện";
-        await Task.Run(() => AesFileService.EncryptFile(input, output, key));
+        await Task.Run(() => AesFileService.EncryptFile(input, output, key, overwrite));
         Status("Mã hóa tệp AES thành công.");
     }
 
@@ -184,8 +202,11 @@ public sealed class AesForm : ToolkitForm
         string input = encryptedPath.Text;
         string output = decryptedPath.Text;
         string original = inputPath.Text;
+        OperationStage = "Giải mã tệp AES";
+        OperationFilePath = output;
+        if (!ConfirmFileOverwrite(output, out bool overwrite)) return;
         fileResult.Text = "So sánh tệp: chưa thực hiện";
-        await Task.Run(() => AesFileService.DecryptFile(input, output, key));
+        await Task.Run(() => AesFileService.DecryptFile(input, output, key, overwrite));
         if (string.IsNullOrWhiteSpace(original))
         {
             fileResult.Text = "So sánh tệp: hãy chọn tệp gốc để đối chiếu.";

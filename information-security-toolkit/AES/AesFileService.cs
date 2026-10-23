@@ -17,10 +17,11 @@ public static class AesFileService
     /// <summary>
     /// Creates a new AES-256-CBC/PKCS7 file authenticated with HMAC-SHA256.
     /// Format v1: magic | version | salt | IV | MAC | ciphertext.
+    /// Existing output is replaced only when overwrite is explicitly enabled and writing succeeds.
     /// </summary>
-    public static void EncryptFile(string inputPath, string outputPath, byte[] key)
+    public static void EncryptFile(string inputPath, string outputPath, byte[] key, bool overwrite = false)
     {
-        (inputPath, outputPath) = ValidateArguments(inputPath, outputPath, key);
+        (inputPath, outputPath) = ValidateArguments(inputPath, outputPath, key, overwrite);
         using var input = OpenInput(inputPath);
 
         byte[] salt = RandomNumberGenerator.GetBytes(SaltSize);
@@ -31,7 +32,7 @@ public static class AesFileService
 
         try
         {
-            WriteNewOutput(outputPath, output =>
+            WriteOutput(outputPath, overwrite, output =>
             {
                 output.Write(header);
                 output.Write(new byte[MacSize]); // Reserved until ciphertext is complete.
@@ -59,12 +60,12 @@ public static class AesFileService
     }
 
     /// <summary>
-    /// Verifies the entire file before decrypting. Existing output files are never replaced.
+    /// Verifies the entire file before decrypting. Existing output is preserved unless overwrite is enabled.
     /// Wrong keys or modified data raise CryptographicException; bad formats raise InvalidDataException.
     /// </summary>
-    public static void DecryptFile(string inputPath, string outputPath, byte[] key)
+    public static void DecryptFile(string inputPath, string outputPath, byte[] key, bool overwrite = false)
     {
-        (inputPath, outputPath) = ValidateArguments(inputPath, outputPath, key);
+        (inputPath, outputPath) = ValidateArguments(inputPath, outputPath, key, overwrite);
         // Keep this handle open through verification and decryption, denying writes/deletes on Windows.
         using var input = OpenInput(inputPath);
         long ciphertextLength = input.Length - CiphertextOffset;
@@ -97,7 +98,7 @@ public static class AesFileService
             }
 
             // Authenticate first: untrusted ciphertext never reaches the CBC decryptor.
-            WriteNewOutput(outputPath, output =>
+            WriteOutput(outputPath, overwrite, output =>
             {
                 input.Position = CiphertextOffset;
                 using var aes = CreateAes(encryptionKey, iv);
@@ -154,7 +155,7 @@ public static class AesFileService
     }
 
     private static (string InputPath, string OutputPath) ValidateArguments(
-        string inputPath, string outputPath, byte[] key)
+        string inputPath, string outputPath, byte[] key, bool overwrite)
     {
         ArgumentNullException.ThrowIfNull(key);
         if (!AesKeyManager.IsValidKey(key))
@@ -178,7 +179,7 @@ public static class AesFileService
             throw new FileNotFoundException("The input file does not exist.", inputPath);
         }
 
-        if (File.Exists(outputPath) || Directory.Exists(outputPath))
+        if (Directory.Exists(outputPath) || (!overwrite && File.Exists(outputPath)))
         {
             throw new IOException("The output path already exists. Choose a new file name.");
         }
@@ -186,9 +187,10 @@ public static class AesFileService
         return (inputPath, outputPath);
     }
 
-    private static void WriteNewOutput(string outputPath, Action<FileStream> write)
+    private static void WriteOutput(string outputPath, bool overwrite, Action<FileStream> write)
     {
-        // Same directory keeps the final move on the same volume; Move never overwrites a target.
+        // Finish and close the temporary file before replacing an explicitly approved target.
+        // The same directory keeps the final move on the same volume; failures preserve the old output.
         string directory = Path.GetDirectoryName(outputPath)!;
         string temporaryPath = Path.Combine(directory, $".aes-{Guid.NewGuid():N}.tmp");
         bool temporaryFileCreated = false;
@@ -201,7 +203,7 @@ public static class AesFileService
                 write(output);
             }
 
-            File.Move(temporaryPath, outputPath);
+            File.Move(temporaryPath, outputPath, overwrite);
         }
         finally
         {
